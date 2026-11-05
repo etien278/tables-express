@@ -1,0 +1,8 @@
+{
+  "appId": "fr.etien278.tablesexpress",
+  "appName": "Tables Express",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#fbfcff"
+  }
+}

@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tables Express</title>
+<meta name="description" content="Apprendre les tables de multiplication en répondant à voix haute, chronomètre de 3 secondes.">
+<meta name="theme-color" content="#1f3a8a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tables Express">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@400;600;800&display=swap">
+<style>
+/* Cahier Seyès : fond quadrillé, encre bleue, marge rouge, points en vert */
+:root{
+  --paper:#fbfcff; --line:#d7e2f3; --line-strong:#b9cbe8; --margin:#e5555b;
+  --ink:#1f3a8a; --ink-soft:#5a6fa8; --text:#1d2433;
+  --good:#1f9d55; --mid:#e0a100; --bad:#d64545; --card:#ffffff;
+  --display:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html{-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation}
+html,body{height:100%}
+body{
+  margin:0;font-family:var(--body);color:var(--text);background-color:var(--paper);
+  background-image:
+    linear-gradient(90deg,transparent 46px,var(--margin) 46px,var(--margin) 48px,transparent 48px),
+    linear-gradient(var(--line-strong) 1px,transparent 1px),
+    linear-gradient(var(--line) 1px,transparent 1px);
+  background-size:100% 100%,100% 32px,100% 8px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.wrap{max-width:520px;margin:0 auto;padding-block:24px 40px;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-weight:800;color:var(--ink);font-size:2.4rem;line-height:1;margin:0}
+h1 span{color:var(--margin)}
+.sub{color:var(--ink-soft);margin:4px 0 0;font-weight:600}
+.card{background:var(--card);border:2px solid var(--line-strong);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px}
+@media (max-width:640px){body{padding-left:max(60px,env(safe-area-inset-left,0px))}}
+.lbl{font-weight:800;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft)}
+input[type=text]{font:inherit;font-size:1.15rem;padding:12px 14px;border:2px solid var(--line-strong);border-radius:10px;color:var(--ink);font-weight:800;width:100%}
+input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline-offset:2px}
+.chips{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.chip{font-family:var(--display);font-weight:800;font-size:1.25rem;padding:8px 0;border-radius:10px;border:2px solid var(--line-strong);background:var(--paper);color:var(--ink-soft);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.seg{flex:1;min-width:80px;font:inherit;font-weight:800;padding:10px;border-radius:10px;border:2px solid var(--line-strong);background:var(--paper);color:var(--ink-soft);cursor:pointer}
+.seg[aria-pressed=true]{border-color:var(--ink);color:var(--ink);background:#e8eefc}
+.small{font-size:.85rem;color:var(--ink-soft);margin:0}
+.btn{font-family:var(--display);font-weight:800;font-size:1.4rem;padding:14px;border:none;border-radius:12px;background:var(--margin);color:#fff;cursor:pointer;box-shadow:0 4px 0 #b53a40}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b53a40}
+.btn.alt{background:var(--card);color:var(--ink);border:2px solid var(--ink);box-shadow:0 4px 0 var(--ink)}
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.rules div{border-radius:10px;padding:8px 4px;font-weight:800;color:#fff}
+.r3{background:var(--good)}.r2{background:var(--mid)}.r1{background:var(--margin)}
+.rules small{display:block;font-weight:600;opacity:.9}
+.board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.board li{display:flex;justify-content:space-between;font-weight:600;font-variant-numeric:tabular-nums;border-bottom:1px dashed var(--line-strong);padding:4px 0}
+.board b{color:var(--ink)}
+
+/* Jeu */
+.hud{display:flex;justify-content:space-between;align-items:center;font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.hud .score{font-family:var(--display);font-size:1.6rem;color:var(--ink)}
+.question{font-family:var(--display);font-weight:800;color:var(--ink);font-size:clamp(4rem,22vw,7rem);text-align:center;line-height:1;margin:8px 0 0;font-variant-numeric:tabular-nums}
+.answer{min-height:3.2rem;text-align:center;font-family:var(--display);font-size:2.4rem;font-weight:800;color:var(--ink-soft)}
+.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:repeat(3,1fr)}
+.bar span{position:relative;font-size:.7rem;font-weight:800;color:var(--ink-soft);display:grid;place-items:center;z-index:1;border-right:2px solid var(--paper)}
+.bar span:last-child{border-right:none}
+.fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--good);transition:background .2s}
+.feedback{text-align:center;font-family:var(--display);font-weight:800;font-size:1.6rem;min-height:2.2rem}
+.ok{color:var(--good)}.ko{color:var(--bad)}.late{color:var(--mid)}
+.mic{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;color:var(--ink-soft);font-size:.95rem;min-height:1.5rem}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--line-strong)}
+.dot.on{background:var(--margin);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none}.fill{transition:none}}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad button{font-family:var(--display);font-weight:800;font-size:1.6rem;padding:12px 0;border-radius:12px;border:2px solid var(--line-strong);background:var(--card);color:var(--ink);cursor:pointer}
+.pad button.go{background:var(--ink);color:#fff;border-color:var(--ink)}
+.big{font-family:var(--display);font-weight:800;font-size:3.4rem;color:var(--ink);line-height:1;text-align:center;font-variant-numeric:tabular-nums}
+.big small{font-size:1.4rem;color:var(--ink-soft)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{border:2px solid var(--line-strong);border-radius:10px;padding:8px 4px;background:var(--paper)}
+.stats b{display:block;font-family:var(--display);font-size:1.5rem;color:var(--ink);font-variant-numeric:tabular-nums}
+.stats span{font-size:.75rem;font-weight:700;color:var(--ink-soft)}
+.miss{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.miss li{background:#fdecec;color:var(--bad);font-weight:800;border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
+.err{color:var(--bad);font-weight:700;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ÉCRAN RÉGLAGES -->
+  <section id="setup">
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <header>
+        <h1>Tables <span>Express</span></h1>
+        <p class="sub">Dis le résultat à voix haute, le plus vite possible.</p>
+      </header>
+
+      <div class="card">
+        <label class="lbl" for="pseudo">Ton pseudo</label>
+        <input type="text" id="pseudo" maxlength="20" placeholder="ex. Lou" autocomplete="off">
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="lbl">Tables à réviser</span>
+          <button class="seg" id="allBtn" style="flex:0;min-width:auto;padding:6px 12px" aria-pressed="false">Toutes</button>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="card">
+        <span class="lbl">Nombre de calculs</span>
+        <div class="row" id="countRow">
+          <button class="seg" data-n="10" aria-pressed="false">10</button>
+          <button class="seg" data-n="20" aria-pressed="true">20</button>
+          <button class="seg" data-n="30" aria-pressed="false">30</button>
+        </div>
+        <span class="lbl">Réponse</span>
+        <div class="row" id="modeRow">
+          <button class="seg" data-mode="voice" aria-pressed="true">À l'oral</button>
+          <button class="seg" data-mode="pad" aria-pressed="false">Au clavier</button>
+        </div>
+        <p class="small" id="voiceNote"></p>
+      </div>
+
+      <div class="rules" aria-label="Barème">
+        <div class="r3">3 pts<small>moins d'1 s</small></div>
+        <div class="r2">2 pts<small>moins de 2 s</small></div>
+        <div class="r1">1 pt<small>moins de 3 s</small></div>
+      </div>
+      <p class="small" style="text-align:center">Erreur ou plus de 3 secondes : 0 point.</p>
+
+      <p class="err" id="setupErr" hidden></p>
+      <button class="btn alt" id="installBtn" hidden style="font-size:1.05rem;padding:10px">Installer l'application</button>
+      <button class="btn" id="startBtn">C'est parti !</button>
+
+      <div class="card" id="boardCard" hidden>
+        <span class="lbl">Meilleurs scores sur cet appareil</span>
+        <ul class="board" id="board"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ÉCRAN JEU -->
+  <section id="game" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="hud">
+        <span id="hudName"></span>
+        <span id="hudCount">1 / 20</span>
+        <span class="score" id="hudScore">0 pt</span>
+      </div>
+      <div class="question" id="question">Prêt ?</div>
+      <div class="bar" aria-hidden="true">
+        <div class="fill" id="fill"></div>
+        <span>3 pts</span><span>2 pts</span><span>1 pt</span>
+      </div>
+      <div class="answer" id="answer"></div>
+      <div class="feedback" id="feedback"></div>
+      <div class="mic" id="micLine"><span class="dot" id="dot"></span><span id="micText">Micro en attente</span></div>
+      <div class="pad" id="pad" hidden>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="del" aria-label="Effacer">⌫</button><button data-k="0">0</button><button data-k="ok" class="go">OK</button>
+      </div>
+      <button class="btn alt" id="quitBtn" style="font-size:1rem;padding:10px">Arrêter</button>
+    </div>
+  </section>
+
+  <!-- ÉCRAN RÉSULTATS -->
+  <section id="result" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <h1 id="resTitle">Bravo !</h1>
+      <div class="card">
+        <div class="big"><span id="resScore">0</span> <small>/ <span id="resMax">0</span> pts</small></div>
+        <div class="stats">
+          <div><b id="resGood">0</b><span>bonnes réponses</span></div>
+          <div><b id="resFast">0</b><span>éclairs (3 pts)</span></div>
+          <div><b id="resAvg">–</b><span>temps moyen</span></div>
+        </div>
+      </div>
+      <div class="card" id="missCard">
+        <span class="lbl">À retravailler</span>
+        <ul class="miss" id="missList"></ul>
+      </div>
+      <button class="btn" id="againBtn">Rejouer</button>
+      <button class="btn alt" id="setupBtn">Changer les réglages</button>
+    </div>
+  </section>
+</div>
+
+<script src="vendor/capacitor.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const LIMIT = 3000;               // 3 secondes
+  const MULT_MAX = 10;              // multiplicateur de 0 à 10
+  const store = {
+    get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+    set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  };
+
+  // ---------- Réglages ----------
+  let tables = new Set(store.get("tx_tables",[2,3,4,5]));
+  let count = store.get("tx_count",20);
+  let mode = store.get("tx_mode","voice");
+  $("pseudo").value = store.get("tx_pseudo","");
+
+  // Dans l'application Android, on utilise la reconnaissance vocale du téléphone
+  const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const NativeSR = (IS_NATIVE && window.capacitorExports) ? window.capacitorExports.registerPlugin("SpeechRecognition") : null;
+  const SR = NativeSR ? null : (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const HAS_VOICE = !!(SR || NativeSR);
+  if(NativeSR){
+    $("voiceNote").textContent = "Le téléphone va demander l'accès au micro la première fois. Parle clairement : « quarante-deux ».";
+  } else if(!SR){
+    mode = "pad";
+    $("voiceNote").textContent = "La reconnaissance vocale n'est pas disponible dans ce navigateur. Utilise Chrome, Edge ou Safari pour jouer à l'oral.";
+  } else {
+    $("voiceNote").textContent = "Le navigateur va demander l'accès au micro. Parle clairement : « quarante-deux ».";
+  }
+
+  const chips = $("chips");
+  for(let t=0;t<=11;t++){
+    const b = document.createElement("button");
+    b.className="chip"; b.textContent=t; b.dataset.t=t;
+    b.addEventListener("click",()=>{ tables.has(t)?tables.delete(t):tables.add(t); renderSetup(); });
+    chips.appendChild(b);
+  }
+  $("allBtn").addEventListener("click",()=>{
+    if(tables.size===12) tables.clear(); else for(let t=0;t<=11;t++) tables.add(t);
+    renderSetup();
+  });
+  document.querySelectorAll("#countRow .seg").forEach(b=>b.addEventListener("click",()=>{count=+b.dataset.n;renderSetup();}));
+  document.querySelectorAll("#modeRow .seg").forEach(b=>b.addEventListener("click",()=>{
+    if(b.dataset.mode==="voice" && !HAS_VOICE) return;
+    mode=b.dataset.mode;renderSetup();
+  }));
+
+  function renderSetup(){
+    chips.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",tables.has(+c.dataset.t)));
+    $("allBtn").setAttribute("aria-pressed",tables.size===12);
+    document.querySelectorAll("#countRow .seg").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.n===count));
+    document.querySelectorAll("#modeRow .seg").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===mode));
+    renderBoard();
+  }
+  function renderBoard(){
+    const list = store.get("tx_board",[]);
+    $("boardCard").hidden = !list.length;
+    $("board").innerHTML="";
+    list.slice(0,5).forEach(e=>{
+      const li=document.createElement("li");
+      const a=document.createElement("span"); a.textContent=e.name;
+      const b=document.createElement("b"); b.textContent=e.score+" / "+e.max+" pts";
+      li.append(a,b); $("board").appendChild(li);
+    });
+  }
+  renderSetup();
+
+  // ---------- Lecture des nombres dits en français ----------
+  const WORDS = {zéro:0,zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,cette:7,set:7,huit:8,neuf:9,
+    dix:10,dis:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,vingt:20,vingts:20,vin:20,cents:100,trente:30,
+    quarante:40,cinquante:50,soixante:60,cent:100,sans:100};
+  function parseNumber(txt){
+    txt = txt.toLowerCase();
+    const digits = txt.match(/\d+/g);
+    if(digits) return parseInt(digits[digits.length-1],10);
+    const toks = txt.replace(/[-']/g," ").split(/\s+/).filter(Boolean);
+    let cur=0, found=false, prev=null;
+    for(const w of toks){
+      if(w==="et"){ continue; }
+      if(!(w in WORDS)){ prev=null; continue; }
+      const v=WORDS[w]; found=true;
+      if(v===100) cur=(cur||1)*100;
+      else if(v===20 && prev===4) cur=cur-4+80;
+      else cur+=v;
+      prev=v;
+    }
+    return found?cur:null;
+  }
+
+  // ---------- Partie ----------
+  let deck=[], idx=0, score=0, results=[], qStart=0, raf=0, timeout=0, active=false, typed="", playing=false;
+  let rec=null, recStartIdx=0, recRunning=false, wantRec=false;
+
+  function buildDeck(){
+    const pool=[];
+    [...tables].forEach(a=>{ for(let b=0;b<=MULT_MAX;b++) pool.push([a,b]); });
+    const d=[]; let last="";
+    while(d.length<count){
+      const p=pool[Math.floor(Math.random()*pool.length)];
+      const key=p.join("x");
+      if(key===last && pool.length>1) continue;
+      // affiche dans un sens ou dans l'autre
+      d.push(Math.random()<.5?p:[p[1],p[0]]); last=key;
+    }
+    return d;
+  }
+
+  function setupRecognition(){
+    if(rec) return;
+    rec = new SR();
+    rec.lang="fr-FR"; rec.continuous=true; rec.interimResults=true; rec.maxAlternatives=3;
+    rec.onstart=()=>{ recRunning=true; recStartIdx=0; $("dot").classList.add("on"); $("micText").textContent="Je t'écoute"; };
+    rec.onend=()=>{ recRunning=false; $("dot").classList.remove("on"); if(wantRec){ try{rec.start();}catch(e){} } };
+    rec.onerror=e=>{
+      if(e.error==="not-allowed"||e.error==="service-not-allowed"){
+        wantRec=false; $("micText").textContent="Micro refusé : passe au clavier.";
+        switchToPad();
+      }
+    };
+    rec.onresult=e=>{
+      if(!active) return;
+      for(let i=Math.max(e.resultIndex,recStartIdx);i<e.results.length;i++){
+        const r=e.results[i];
+        let heard=null, txt=r[0].transcript;
+        for(let a=0;a<r.length;a++){
+          const n=parseNumber(r[a].transcript);
+          if(n!==null){ if(heard===null){heard=n;txt=r[a].transcript;} if(n===currentAnswer()){heard=n;txt=r[a].transcript;break;} }
+        }
+        if(heard===null) continue;
+        $("answer").textContent=heard;
+        if(heard===currentAnswer()){ finish(heard); return; }
+        if(r.isFinal){ finish(heard); return; }
+      }
+    };
+  }
+  // ---------- Micro natif (application Android) ----------
+  let nativeOn=false, nativeWrongTimer=0, nativeReady=false;
+  function nativeHeard(matches){
+    if(!active || !matches || !matches.length) return;
+    const ans=currentAnswer(); let heard=null;
+    for(const m of matches){ const n=parseNumber(m); if(n===null) continue; if(heard===null) heard=n; if(n===ans){ heard=n; break; } }
+    if(heard===null) return;
+    $("answer").textContent=heard;
+    clearTimeout(nativeWrongTimer);
+    if(heard===ans){ finish(heard); return; }
+    // « quarante » peut précéder « quarante-deux » : on attend un instant avant de compter faux
+    const snap=idx; nativeWrongTimer=setTimeout(()=>{ if(active && idx===snap) finish(heard); },700);
+  }
+  async function nativeSetup(){
+    if(nativeReady) return true;
+    try{
+      const av=await NativeSR.available();
+      if(!av.available){ $("micText").textContent="Reconnaissance vocale absente : passe au clavier."; switchToPad(); return false; }
+      let perm=await NativeSR.checkPermissions();
+      if(perm.speechRecognition!=="granted") perm=await NativeSR.requestPermissions();
+      if(perm.speechRecognition!=="granted"){ $("micText").textContent="Micro refusé : passe au clavier."; switchToPad(); return false; }
+      await NativeSR.addListener("partialResults",d=>nativeHeard(d.matches));
+      await NativeSR.addListener("listeningState",d=>{
+        if(d.status==="stopped"){ nativeOn=false; $("dot").classList.remove("on"); if(active && mode==="voice") nativeListen(); }
+      });
+      nativeReady=true; return true;
+    }catch(e){ $("micText").textContent="Micro indisponible : passe au clavier."; switchToPad(); return false; }
+  }
+  async function nativeListen(){
+    try{
+      await NativeSR.start({language:"fr-FR",maxResults:5,partialResults:true,popup:false});
+      nativeOn=true; $("dot").classList.add("on"); $("micText").textContent="Je t'écoute";
+    }catch(e){ nativeOn=false; }
+  }
+  function nativeStop(){ clearTimeout(nativeWrongTimer); if(NativeSR){ try{ NativeSR.stop(); }catch(e){} } nativeOn=false; $("dot").classList.remove("on"); }
+
+  function switchToPad(){ mode="pad"; $("pad").hidden=false; $("micLine").hidden=true; }
+
+  function currentAnswer(){ const [a,b]=deck[idx]; return a*b; }
+
+  function start(){
+    const name=$("pseudo").value.trim();
+    if(!name){ showErr("Écris ton pseudo pour commencer."); $("pseudo").focus(); return; }
+    if(!tables.size){ showErr("Choisis au moins une table."); return; }
+    $("setupErr").hidden=true;
+    store.set("tx_pseudo",name); store.set("tx_tables",[...tables]); store.set("tx_count",count); store.set("tx_mode",mode);
+    deck=buildDeck(); idx=0; score=0; results=[]; playing=true;
+    $("hudName").textContent=name; $("hudScore").textContent="0 pt";
+    show("game");
+    $("pad").hidden = mode!=="pad"; $("micLine").hidden = mode!=="voice";
+    if(mode==="voice" && SR){ setupRecognition(); wantRec=true; if(!recRunning){ try{rec.start();}catch(e){} } }
+    if(mode==="voice" && NativeSR){ nativeSetup(); }
+    // petit compte à rebours pour laisser le micro démarrer
+    const steps=["3","2","1"]; let s=0;
+    $("feedback").textContent=""; $("answer").textContent="";
+    $("question").textContent="Prêt ?";
+    const tick=()=>{ if(!playing) return; if(s<steps.length){ $("question").textContent=steps[s++]; setTimeout(tick,600);} else ask(); };
+    setTimeout(tick,500);
+  }
+  function showErr(m){ $("setupErr").textContent=m; $("setupErr").hidden=false; }
+
+  async function ask(){
+    if(!playing) return;
+    const [a,b]=deck[idx];
+    if(mode==="voice" && NativeSR){
+      // le calcul s'affiche seulement quand le micro est prêt, pour ne pas perdre de temps
+      $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent="";
+      $("fill").style.width="0";
+      if(!(await nativeSetup())) { if(!playing) return; }
+      else { await nativeListen(); await new Promise(r=>setTimeout(r,150)); }
+      if(!playing) return;
+    }
+    $("hudCount").textContent=(idx+1)+" / "+deck.length;
+    $("question").textContent=a+" × "+b;
+    $("answer").textContent=""; $("feedback").textContent=""; $("feedback").className="feedback";
+    typed="";
+    // les nouveaux résultats arrivent après ceux déjà entendus : l'index est fixé au premier événement
+    if(rec && recRunning){ recStartIdx = Infinity; }
+    active=true; qStart=performance.now();
+    cancelAnimationFrame(raf); loop();
+    clearTimeout(timeout); timeout=setTimeout(()=>finish(null),LIMIT);
+  }
+
+  // Index de départ : on mémorise le nombre de résultats au moment de la question
+  let resultsSeen=0;
+  function patchIndexTracking(){
+    if(!rec || rec._patched) return;
+    const orig=rec.onresult;
+    rec.onresult=e=>{
+      if(recStartIdx===Infinity){
+        // premier événement après la question : un résultat non terminé déjà ouvert est ignoré
+        let i=e.resultIndex;
+        while(i<e.results.length && i<resultsSeen) i++;
+        recStartIdx=i;
+      }
+      resultsSeen=e.results.length;
+      orig(e);
+    };
+    const origStart=rec.onstart;
+    rec.onstart=()=>{ resultsSeen=0; origStart(); };
+    rec._patched=true;
+  }
+
+  function loop(){
+    const t=performance.now()-qStart;
+    const p=Math.min(1,t/LIMIT);
+    const f=$("fill"); f.style.width=(p*100)+"%";
+    f.style.background = t<1000?"var(--good)":t<2000?"var(--mid)":"var(--margin)";
+    if(active && p<1) raf=requestAnimationFrame(loop);
+  }
+
+  function finish(given){
+    if(!active) return;
+    active=false; clearTimeout(timeout); cancelAnimationFrame(raf);
+    const t=performance.now()-qStart;
+    if(NativeSR) nativeStop();
+    const ans=currentAnswer(); const [a,b]=deck[idx];
+    let pts=0, cls="ko", msg;
+    if(given===null){ msg="Trop tard ! "+a+" × "+b+" = "+ans; cls="late"; }
+    else if(given!==ans){ msg="Non, "+a+" × "+b+" = "+ans; }
+    else if(t>LIMIT){ msg="Juste, mais trop tard"; cls="late"; }
+    else { pts = t<=1000?3:t<=2000?2:1; cls="ok"; msg="+"+pts+(pts>1?" pts":" pt")+" · "+(t/1000).toFixed(1).replace(".",",")+" s"; }
+    score+=pts;
+    results.push({a,b,ans,given,t,pts});
+    $("feedback").textContent=msg; $("feedback").className="feedback "+cls;
+    $("hudScore").textContent=score+(score>1?" pts":" pt");
+    setTimeout(()=>{
+      if(!playing) return;
+      idx++;
+      if(idx<deck.length) ask(); else end();
+    }, pts>0?900:1800);
+  }
+
+  function end(){
+    playing=false; wantRec=false; if(rec && recRunning){ try{rec.stop();}catch(e){} }
+    if(NativeSR) nativeStop();
+    const max=deck.length*3;
+    const good=results.filter(r=>r.pts>0);
+    $("resScore").textContent=score; $("resMax").textContent=max;
+    $("resGood").textContent=good.length+"/"+deck.length;
+    $("resFast").textContent=results.filter(r=>r.pts===3).length;
+    $("resAvg").textContent= good.length ? (good.reduce((s,r)=>s+r.t,0)/good.length/1000).toFixed(1).replace(".",",")+" s" : "–";
+    const ratio=score/max;
+    $("resTitle").textContent = ratio>=.8?"Champion·ne !":ratio>=.5?"Bien joué !":"Continue, ça vient !";
+    const misses=[...new Map(results.filter(r=>r.pts===0).map(r=>[r.a+"×"+r.b,r])).values()];
+    $("missCard").hidden=!misses.length;
+    $("missList").innerHTML="";
+    misses.forEach(r=>{ const li=document.createElement("li"); li.textContent=r.a+" × "+r.b+" = "+r.ans; $("missList").appendChild(li); });
+    const board=store.get("tx_board",[]);
+    board.push({name:$("pseudo").value.trim(),score,max,date:Date.now()});
+    board.sort((x,y)=>(y.score/y.max)-(x.score/x.max)||y.score-x.score);
+    store.set("tx_board",board.slice(0,20));
+    show("result");
+  }
+
+  function quit(){
+    playing=false; active=false; wantRec=false; clearTimeout(timeout); cancelAnimationFrame(raf);
+    if(rec && recRunning){ try{rec.stop();}catch(e){} }
+    if(NativeSR) nativeStop();
+    renderSetup(); show("setup");
+  }
+
+  function show(id){ ["setup","game","result"].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
+
+  // Clavier
+  function key(k){
+    if(!active) return;
+    if(k==="del"){ typed=typed.slice(0,-1); }
+    else if(k==="ok"){ if(typed!=="") finish(parseInt(typed,10)); return; }
+    else if(typed.length<3){ typed+=k; }
+    $("answer").textContent=typed;
+  }
+  $("pad").addEventListener("click",e=>{ const b=e.target.closest("button"); if(b) key(b.dataset.k); });
+  document.addEventListener("keydown",e=>{
+    if($("game").hidden || mode!=="pad") return;
+    if(/^[0-9]$/.test(e.key)) key(e.key);
+    else if(e.key==="Backspace") key("del");
+    else if(e.key==="Enter") key("ok");
+  });
+
+  $("startBtn").addEventListener("click",()=>{ start(); patchIndexTracking(); });
+  $("againBtn").addEventListener("click",()=>{ start(); patchIndexTracking(); });
+  $("setupBtn").addEventListener("click",()=>{ renderSetup(); show("setup"); });
+  $("quitBtn").addEventListener("click",quit);
+
+  // ---------- Application installable ----------
+  let installEvt=null;
+  window.addEventListener("beforeinstallprompt",e=>{ if(IS_NATIVE) return; e.preventDefault(); installEvt=e; $("installBtn").hidden=false; });
+  $("installBtn").addEventListener("click",async()=>{
+    if(!installEvt) return;
+    installEvt.prompt();
+    try{ await installEvt.userChoice; }catch(e){}
+    installEvt=null; $("installBtn").hidden=true;
+  });
+  window.addEventListener("appinstalled",()=>{ $("installBtn").hidden=true; });
+  if(!IS_NATIVE && "serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
+    window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+  }
+  // garde l'écran allumé pendant une partie
+  let wake=null;
+  async function keepAwake(on){
+    try{
+      if(on && "wakeLock" in navigator && !wake){ wake=await navigator.wakeLock.request("screen"); wake.addEventListener("release",()=>{wake=null;}); }
+      if(!on && wake){ await wake.release(); wake=null; }
+    }catch(e){}
+  }
+  new MutationObserver(()=>keepAwake(!$("game").hidden)).observe($("game"),{attributes:true,attributeFilter:["hidden"]});
+})();
+</script>
+</body>
+</html>

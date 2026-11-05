@@ -1,0 +1,56 @@
+name: Construire l'APK Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Copier l'appli web dans le projet Android
+        run: npx cap sync android
+
+      - name: Construire l'APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../tables-express.apk
+
+      - name: Garder l'APK dans les résultats de la construction
+        uses: actions/upload-artifact@v4
+        with:
+          name: tables-express-apk
+          path: tables-express.apk
+
+      - name: Publier une version téléchargeable
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Tables Express 1.0.${{ github.run_number }}
+          body: |
+            Télécharge **tables-express.apk** ci-dessous et ouvre-le sur ton téléphone Android pour l'installer.
+            Les mises à jour s'installent par-dessus l'ancienne version, les scores sont conservés.
+          files: tables-express.apk
+          make_latest: true
