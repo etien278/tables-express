@@ -387,7 +387,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     };
   }
   // ---------- Micro natif (application Android) ----------
-  const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",10:"trop de demandes",11:"service coupé",12:"langue non prise en charge",13:"français non téléchargé"};
+  const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",10:"trop de demandes",99:"bloqué, relancé",11:"service coupé",12:"langue non prise en charge",13:"français non téléchargé"};
   // Journal du micro : ce qui s'est passé pendant la partie, pour comprendre les réponses perdues
   let micLog=[], logStart=0, errCount={};
   function logMic(m){ if(micLog.length<600) micLog.push(((performance.now()-logStart)/1000).toFixed(1).padStart(6," ")+"  "+m); }
@@ -554,7 +554,14 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     if(!active) return;
     active=false; clearTimeout(timeout); clearTimeout(graceTimer); cancelAnimationFrame(raf);
     // dans l'appli, le temps compté est celui où l'enfant a commencé à répondre
-    const t=(NativeSR && given!==null && speechAt!==null) ? speechAt-qStart : performance.now()-qStart;
+    let t=performance.now()-qStart;
+    if(NativeSR && given!==null){
+      if(speechAt!==null) t=speechAt-qStart;
+      // parole commencée juste avant l'affichage (ou phrase qui continue) :
+      // on retire le temps que met le téléphone à comprendre (environ 0,8 s)
+      else if(qStart-utterStart<1000) t=Math.max(0, utterStart-qStart);
+      else t=Math.max(0, t-800);
+    }
     clearTimeout(nativeWrongTimer);
     const ans=currentAnswer(); const [a,b]=deck[idx];
     let pts=0, cls="ko", msg;

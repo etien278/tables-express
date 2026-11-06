@@ -202,11 +202,31 @@ public class VoixPlugin extends Plugin {
         }
 
         @Override public void onReadyForSpeech(Bundle params) { if (current()) { failures = 0; notifyListeners("ready", withTime()); } }
-        @Override public void onBeginningOfSpeech() { if (current()) notifyListeners("speech", withTime()); }
+        private boolean heardSomething = false;
+
+        @Override public void onBeginningOfSpeech() {
+            if (!current()) return;
+            notifyListeners("speech", withTime());
+            // garde-fou : si rien n'est compris 3 s après le début de la parole, on relance l'écoute
+            main.postDelayed(() -> {
+                if (current() && !heardSomething) {
+                    done = true;
+                    JSObject ret = withTime();
+                    ret.put("code", 99);
+                    notifyListeners("error", ret);
+                    restart(200, true);
+                }
+            }, 3000);
+        }
         @Override public void onRmsChanged(float rmsdB) {}
         @Override public void onBufferReceived(byte[] buffer) {}
         @Override public void onEndOfSpeech() { if (current()) notifyListeners("end", withTime()); }
-        @Override public void onPartialResults(Bundle b) { if (current()) send("partial", b); }
+        @Override public void onPartialResults(Bundle b) {
+            if (!current()) return;
+            ArrayList<String> m = b == null ? null : b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            if (m != null && !m.isEmpty() && m.get(0) != null && !m.get(0).trim().isEmpty()) heardSomething = true;
+            send("partial", b);
+        }
         @Override public void onEvent(int eventType, Bundle params) {}
 
         @Override
