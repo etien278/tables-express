@@ -439,7 +439,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
         utterStart=performance.now(); micState(true,"Je t'écoute");
         micReadyOnce=true; if(firstReady){ firstReady(); firstReady=null; }
       });
-      await NativeSR.addListener("speech",()=>{ logMic("parole détectée"); inUtterance=true; utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
+      await NativeSR.addListener("speech",()=>{ logMic("parole détectée"); inUtterance=true; utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; if(active && $("feedback").textContent==="Pas compris, répète !") $("feedback").textContent=""; });
       await NativeSR.addListener("end",()=>{ logMic("fin de parole"); } );
       await NativeSR.addListener("end",()=>micState(true,"Je réfléchis…"));
       await NativeSR.addListener("partial",d=>{ logMic("partiel : "+(d.matches||[]).join(" | ")); });
@@ -449,6 +449,13 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
         inUtterance=false;
         logMic("erreur "+d.code+" ("+(NATIVE_ERRORS[d.code]||d.message||"?")+")"+(active?"":" — entre deux calculs"));
         errCount[d.code]=(errCount[d.code]||0)+1;
+        if(d.code===7 && active && speechAt!==null){
+          // l'enfant a parlé à temps mais le téléphone n'a pas compris : on lui demande de répéter,
+          // et le temps reste compté depuis sa première réponse
+          lastSpeechAt=speechAt;
+          $("feedback").textContent="Pas compris, répète !"; $("feedback").className="feedback late";
+          return;
+        }
         if(d.code===6||d.code===7){ if(active && speechAt!==null){ lastSpeechAt=speechAt; speechAt=null; } return; }
         if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
         micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
