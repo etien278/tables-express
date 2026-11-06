@@ -72,7 +72,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .hud .score{font-family:var(--display);font-size:1.6rem;color:var(--ink)}
 .question{font-family:var(--display);font-weight:800;color:var(--ink);font-size:clamp(4rem,22vw,7rem);text-align:center;line-height:1;margin:8px 0 0;font-variant-numeric:tabular-nums}
 .answer{min-height:3.2rem;text-align:center;font-family:var(--display);font-size:2.4rem;font-weight:800;color:var(--ink-soft)}
-.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:1.5fr 1fr 1fr}
+.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:1.2fr 1fr 1fr}
 .count{align-self:center;min-width:3.2rem;height:3.2rem;padding:0 10px;border-radius:999px;border:3px solid currentColor;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1;color:var(--good);font-variant-numeric:tabular-nums;margin-bottom:-6px}
 .count:empty{visibility:hidden}
 .count.done{color:var(--margin)}
@@ -163,9 +163,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       </div>
 
       <div class="rules" aria-label="Barème">
-        <div class="r3">3 pts<small>avant 1,5 s</small></div>
-        <div class="r2">2 pts<small>avant 2,5 s</small></div>
-        <div class="r1">1 pt<small>avant 3,5 s</small></div>
+        <div class="r3">3 pts<small>avant 1,2 s</small></div>
+        <div class="r2">2 pts<small>avant 2,2 s</small></div>
+        <div class="r1">1 pt<small>avant 3,2 s</small></div>
       </div>
       <p class="small" style="text-align:center">Le compteur fait 0, 1, 2, 3… puis « Fini ! ». Erreur ou trop tard : 0 point.</p>
 
@@ -298,8 +298,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const LIMIT = 3500;               // compteur 0, 1, 2, 3 puis fini
-  const T3 = 1500, T2 = 2500;       // 3 pts avant 1,5 s, 2 pts avant 2,5 s, 1 pt avant 3,5 s
+  const LIMIT = 3200;               // compteur 0, 1, 2, 3 puis fini
+  const T3 = 1200, T2 = 2200;       // 3 pts avant 1,2 s, 2 pts avant 2,2 s, 1 pt avant 3,2 s
   const pointsFor = t => t<T3?3 : t<T2?2 : t<LIMIT?1 : 0;
   const MULT_MAX = 10;              // multiplicateur de 0 à 10
   const store = {

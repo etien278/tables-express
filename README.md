@@ -4,10 +4,10 @@ Application pour apprendre les tables de multiplication de 0 à 11. L'enfant cho
 
 | Temps de réponse | Points |
 |---|---|
-| avant 1,5 seconde | 3 |
-| avant 2,5 secondes | 2 |
-| avant 3,5 secondes | 1 |
-| erreur ou plus de 3,5 secondes | 0 |
+| avant 1,2 seconde | 3 |
+| avant 2,2 secondes | 2 |
+| avant 3,2 secondes | 1 |
+| erreur ou plus de 3,2 secondes | 0 |
 
 Un compteur 0, 1, 2, 3 s'affiche sous le calcul. Dans l'appli Android, le temps compte à partir du moment où l'enfant commence à parler. Le journal du micro, en fin de partie, aide à comprendre une réponse perdue.
 
