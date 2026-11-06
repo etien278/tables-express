@@ -376,23 +376,26 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   }
   // ---------- Micro natif (application Android) ----------
   const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
-  let speechAt=null, graceTimer=0, lastHeard="";
-  let nativeWrongTimer=0, nativeReady=false, nativeReadyResolve=null, nativeRetries=0;
+  // Le micro écoute en continu pendant toute la partie ; chaque phrase est rattachée au calcul affiché.
+  let speechAt=null, graceTimer=0, lastHeard="", utterStart=0, micReadyOnce=false, firstReady=null;
+  let nativeWrongTimer=0, nativeReady=false;
   function nativeHeard(matches, final){
     if(!active || !matches || !matches.length) return false;
-    const ans=currentAnswer(); let heard=null;
-    $("heardText").textContent="Entendu : « "+matches[0]+" »";
-    lastHeard=matches[0];
-    outer: for(const m of matches){
+    const ans=currentAnswer(); let heard=null, ok=false;
+    for(const m of matches){
       const runs=wordRuns(m);
       const main=runs.length?runs[runs.length-1]:parseNumber(m);
       if(main!==null && heard===null) heard=main;
-      for(const n of candidates(m)){ if(n===ans){ heard=n; break outer; } }
+      if(candidates(m).includes(ans)){ ok=true; break; }
     }
-    if(heard===null) return false;
+    // une phrase commencée avant l'affichage du calcul ne compte que si elle est juste
+    const before = utterStart < qStart-150;
+    if(ok){ $("heardText").textContent="Entendu : « "+matches[0]+" »"; $("answer").textContent=ans; finish(ans); return true; }
+    if(before || heard===null){ if(!before) $("heardText").textContent="Entendu : « "+matches[0]+" »"; return false; }
+    $("heardText").textContent="Entendu : « "+matches[0]+" »";
     $("answer").textContent=heard;
     clearTimeout(nativeWrongTimer);
-    if(heard===ans || final){ finish(heard); return true; }
+    if(final){ finish(heard); return true; }
     // « quarante » peut précéder « quarante-deux » : on attend un instant avant de compter faux
     const snap=idx; nativeWrongTimer=setTimeout(()=>{ if(active && idx===snap) finish(heard); },700);
     return true;
@@ -406,31 +409,28 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       let perm=await NativeSR.checkPermissions();
       if(perm.micro!=="granted") perm=await NativeSR.requestPermissions();
       if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
-      await NativeSR.addListener("ready",()=>{ micState(true,"Je t'écoute"); nativeRetries=0; if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; } });
+      await NativeSR.addListener("ready",()=>{
+        utterStart=performance.now(); micState(true,"Je t'écoute");
+        micReadyOnce=true; if(firstReady){ firstReady(); firstReady=null; }
+      });
+      await NativeSR.addListener("speech",()=>{ utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
+      await NativeSR.addListener("end",()=>micState(true,"Je réfléchis…"));
       await NativeSR.addListener("partial",d=>nativeHeard(d.matches,false));
-      await NativeSR.addListener("result",d=>{ micState(false); if(!nativeHeard(d.matches,true) && active){ speechAt=null; nativeListen(); } });
-      await NativeSR.addListener("end",()=>micState(false));
-      await NativeSR.addListener("speech",()=>{ if(active && speechAt===null) speechAt=performance.now(); });
+      await NativeSR.addListener("result",d=>{ if(!nativeHeard(d.matches,true) && active) speechAt=null; });
       await NativeSR.addListener("error",d=>{
-        micState(false);
-        if(active && (d.code===6||d.code===7)) speechAt=null;
-        if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; }
+        if(d.code===6||d.code===7){ if(active) speechAt=null; return; }
         if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
-        if(d.code!==6 && d.code!==7) micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
-        if(playing && mode==="voice" && nativeRetries<5){ nativeRetries++; setTimeout(()=>{ if(active) nativeListen(); }, d.code===8||d.code===13?400:100); }
+        micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
       });
       nativeReady=true; return true;
     }catch(e){ micState(false,"Micro indisponible ("+(e&&e.message||e)+") : passe au clavier."); switchToPad(); return false; }
   }
-  // démarre l'écoute et attend que le micro soit prêt (au plus 2 secondes)
-  function nativeListen(){
-    return new Promise(res=>{
-      const t=setTimeout(()=>{ nativeReadyResolve=null; res(); },2000);
-      nativeReadyResolve=()=>{ clearTimeout(t); res(); };
-      NativeSR.start({language:"fr-FR"}).catch(e=>{ micState(false,"Micro : "+(e&&e.message||e)); clearTimeout(t); nativeReadyResolve=null; res(); });
-    });
+  async function nativeBegin(){
+    if(!(await nativeSetup())) return;
+    try{ await NativeSR.start({language:"fr-FR"}); }
+    catch(e){ micState(false,"Micro : "+(e&&e.message||e)); }
   }
-  function nativeStop(){ clearTimeout(nativeWrongTimer); nativeReadyResolve=null; if(NativeSR){ NativeSR.stop().catch(()=>{}); } micState(false); }
+  function nativeStop(){ clearTimeout(nativeWrongTimer); if(NativeSR){ NativeSR.stop().catch(()=>{}); } micState(false,"Micro en pause"); micReadyOnce=false; }
 
   function switchToPad(){ mode="pad"; $("pad").hidden=false; $("micLine").hidden=true; }
 
@@ -447,7 +447,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     show("game");
     $("pad").hidden = mode!=="pad"; $("micLine").hidden = mode!=="voice";
     if(mode==="voice" && SR){ setupRecognition(); wantRec=true; if(!recRunning){ try{rec.start();}catch(e){} } }
-    if(mode==="voice" && NativeSR){ nativeSetup(); }
+    if(mode==="voice" && NativeSR){ nativeBegin(); }
     // petit compte à rebours pour laisser le micro démarrer
     const steps=["3","2","1"]; let s=0;
     $("feedback").textContent=""; $("answer").textContent="";
@@ -461,11 +461,11 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     if(!playing) return;
     const [a,b]=deck[idx];
     if(mode==="voice" && NativeSR){
-      // le calcul s'affiche seulement quand le micro est prêt, pour ne pas perdre de temps
-      $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent="";
-      $("fill").style.width="0";
-      if(!(await nativeSetup())) { if(!playing) return; }
-      else { nativeRetries=0; await nativeListen(); }
+      // seulement au premier calcul : on attend que le micro soit prêt (2 s au plus)
+      if(!micReadyOnce){
+        $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent=""; $("fill").style.width="0";
+        await new Promise(r=>{ firstReady=r; setTimeout(()=>{ firstReady=null; r(); },2000); });
+      }
       if(!playing) return;
     }
     $("hudCount").textContent=(idx+1)+" / "+deck.length;
@@ -524,7 +524,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     active=false; clearTimeout(timeout); clearTimeout(graceTimer); cancelAnimationFrame(raf);
     // dans l'appli, le temps compté est celui où l'enfant a commencé à répondre
     const t=(NativeSR && given!==null && speechAt!==null) ? speechAt-qStart : performance.now()-qStart;
-    if(NativeSR) nativeStop();
+    clearTimeout(nativeWrongTimer);
     const ans=currentAnswer(); const [a,b]=deck[idx];
     let pts=0, cls="ko", msg;
     if(given===null){ msg="Trop tard ! "+a+" × "+b+" = "+ans; cls="late"; }
