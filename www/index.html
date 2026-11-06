@@ -100,6 +100,13 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .err{color:var(--bad);font-weight:700;margin:0}
 .log{white-space:pre-wrap;word-break:break-word;font-size:.75rem;line-height:1.35;max-height:50vh;overflow:auto;margin:0;padding:8px;background:var(--paper);border:1px solid var(--line-strong);border-radius:8px;font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text}
 #logCard summary{cursor:pointer}
+.tablestats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tablestats li{display:grid;grid-template-columns:4.2rem 1fr 6.5rem;align-items:center;gap:8px;font-weight:700;font-variant-numeric:tabular-nums}
+.tablestats .tn{font-family:var(--display);font-weight:800;color:var(--ink)}
+.tablestats .track{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.tablestats .track i{display:block;height:100%;border-radius:6px}
+.tablestats .val{font-size:.8rem;color:var(--ink-soft);text-align:right}
+.linkbtn{align-self:center;font:inherit;font-size:.85rem;color:var(--ink-soft);background:none;border:none;text-decoration:underline;cursor:pointer;padding:4px}
 .heard{text-align:center;margin:-8px 0 0;min-height:1.2rem;font-size:.85rem;color:var(--ink-soft);font-style:italic}
 .fix{align-self:center;font:inherit;font-weight:800;padding:8px 16px;border-radius:999px;border:2px solid var(--good);background:var(--card);color:var(--good);cursor:pointer}
 </style>
@@ -141,6 +148,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
           <button class="seg" data-mode="pad" aria-pressed="false">Au clavier</button>
         </div>
         <p class="small" id="voiceNote"></p>
+        <span class="lbl">Révision</span>
+        <div class="row" id="reviseRow">
+          <button class="seg" id="reviseBtn" aria-pressed="true">Revoir plus souvent les calculs ratés</button>
+        </div>
       </div>
 
       <div class="rules" aria-label="Barème">
@@ -153,11 +164,34 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       <p class="err" id="setupErr" hidden></p>
       <button class="btn alt" id="installBtn" hidden style="font-size:1.05rem;padding:10px">Installer l'application</button>
       <button class="btn" id="startBtn">C'est parti !</button>
+      <button class="btn alt" id="progressBtn" style="font-size:1.05rem;padding:10px">Mes progrès</button>
 
       <div class="card" id="boardCard" hidden>
         <span class="lbl">Meilleurs scores sur cet appareil</span>
         <ul class="board" id="board"></ul>
       </div>
+    </div>
+  </section>
+
+  <!-- ÉCRAN PROGRÈS -->
+  <section id="progress" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <header>
+        <h1 id="progTitle">Progrès</h1>
+        <p class="sub" id="progSub"></p>
+      </header>
+      <div class="card">
+        <span class="lbl">Par table</span>
+        <ul class="tablestats" id="tableStats"></ul>
+        <p class="small">Réussite sur les dernières réponses à chaque calcul, et temps moyen des bonnes réponses.</p>
+      </div>
+      <div class="card" id="weakCard">
+        <span class="lbl">Calculs à revoir</span>
+        <ul class="miss" id="weakList"></ul>
+      </div>
+      <button class="btn alt" id="resetStats" style="font-size:.95rem;padding:8px">Effacer les progrès de ce pseudo</button>
+      <p class="small" id="resetConfirm" hidden></p>
+      <button class="btn" id="progBack">Retour</button>
     </div>
   </section>
 
@@ -206,6 +240,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
         <span class="lbl">À retravailler</span>
         <ul class="miss" id="missList"></ul>
       </div>
+      <button class="linkbtn" id="showLogBtn" hidden>Afficher le journal du micro</button>
       <details class="card" id="logCard" hidden>
         <summary class="lbl">Journal du micro <span id="logSum"></span></summary>
         <pre class="log" id="logText"></pre>
@@ -234,6 +269,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   let tables = new Set(store.get("tx_tables",[2,3,4,5]));
   let count = store.get("tx_count",20);
   let mode = store.get("tx_mode","voice");
+  let revise = store.get("tx_revise",true);
   $("pseudo").value = store.get("tx_pseudo","");
 
   // Dans l'application Android, on utilise la reconnaissance vocale du téléphone
@@ -267,7 +303,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     mode=b.dataset.mode;renderSetup();
   }));
 
+  $("reviseBtn").addEventListener("click",()=>{ revise=!revise; store.set("tx_revise",revise); renderSetup(); });
   function renderSetup(){
+    $("reviseBtn").setAttribute("aria-pressed",revise);
     chips.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",tables.has(+c.dataset.t)));
     $("allBtn").setAttribute("aria-pressed",tables.size===12);
     document.querySelectorAll("#countRow .seg").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.n===count));
@@ -341,6 +379,65 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     return [...out];
   }
 
+  // ---------- Progrès (gardés sur l'appareil, par pseudo) ----------
+  // une fiche par calcul, 7×8 et 8×7 comptent ensemble : n essais, ok réussis, st temps cumulé des réussites, r 6 derniers résultats (points)
+  const factKey=(a,b)=>Math.min(a,b)+"x"+Math.max(a,b);
+  function loadStats(name){ const all=store.get("tx_stats",{}); return all[name.toLowerCase()]||{}; }
+  function saveStats(name,st){ const all=store.get("tx_stats",{}); all[name.toLowerCase()]=st; store.set("tx_stats",all); }
+  function recordStats(name,res){
+    const st=loadStats(name);
+    res.forEach(r=>{
+      const k=factKey(r.a,r.b); const f=st[k]||(st[k]={n:0,ok:0,st:0,r:[]});
+      f.n++; if(r.pts>0){ f.ok++; f.st+=r.t; }
+      f.r.push(r.pts); if(f.r.length>6) f.r.shift();
+    });
+    saveStats(name,st);
+  }
+  // 0 = parfait, 1 = jamais réussi
+  function weakness(f){ if(!f||!f.r.length) return null; return 1 - f.r.reduce((x,y)=>x+y,0)/(3*f.r.length); }
+
+  function renderProgress(){
+    const name=$("pseudo").value.trim();
+    const st=loadStats(name);
+    $("progTitle").textContent = name ? "Progrès de "+name : "Progrès";
+    const keys=Object.keys(st);
+    $("progSub").textContent = keys.length ? keys.reduce((x,k)=>x+st[k].n,0)+" réponses enregistrées sur cet appareil." : "Pas encore de partie enregistrée pour ce pseudo.";
+    const ul=$("tableStats"); ul.innerHTML="";
+    for(let t=0;t<=11;t++){
+      let pts=0, max=0, okT=0, okN=0;
+      for(let b=0;b<=MULT_MAX;b++){
+        const f=st[factKey(t,b)]; if(!f) continue;
+        f.r.forEach(p=>{ pts+=p; max+=3; });
+        okT+=f.st; okN+=f.ok;
+      }
+      const li=document.createElement("li");
+      const tn=document.createElement("span"); tn.className="tn"; tn.textContent="× "+t;
+      const tr=document.createElement("span"); tr.className="track"; const bar=document.createElement("i");
+      const val=document.createElement("span"); val.className="val";
+      if(max){
+        const pct=Math.round(100*pts/max);
+        bar.style.width=pct+"%"; bar.style.background= pct>=80?"var(--good)":pct>=50?"var(--mid)":"var(--margin)";
+        val.textContent=pct+" %"+(okN?" · "+(okT/okN/1000).toFixed(1).replace(".",",")+" s":"");
+      } else { val.textContent="pas joué"; }
+      tr.appendChild(bar); li.append(tn,tr,val); ul.appendChild(li);
+    }
+    const weak=keys.map(k=>({k,w:weakness(st[k])})).filter(x=>x.w!==null && x.w>0.2).sort((x,y)=>y.w-x.w).slice(0,10);
+    $("weakCard").hidden=!weak.length; $("weakList").innerHTML="";
+    weak.forEach(x=>{ const [a,b]=x.k.split("x").map(Number); const li=document.createElement("li"); li.textContent=a+" × "+b+" = "+(a*b); $("weakList").appendChild(li); });
+    $("resetConfirm").hidden=true; $("resetStats").textContent="Effacer les progrès de ce pseudo"; resetArmed=false;
+  }
+  let resetArmed=false;
+  $("progressBtn").addEventListener("click",()=>{
+    if(!$("pseudo").value.trim()){ showErr("Écris ton pseudo pour voir tes progrès."); $("pseudo").focus(); return; }
+    $("setupErr").hidden=true; renderProgress(); show("progress");
+  });
+  $("progBack").addEventListener("click",()=>{ renderSetup(); show("setup"); });
+  $("resetStats").addEventListener("click",()=>{
+    if(!resetArmed){ resetArmed=true; $("resetStats").textContent="Appuie encore pour confirmer"; return; }
+    saveStats($("pseudo").value.trim(),{}); renderProgress();
+    $("resetConfirm").textContent="Progrès effacés."; $("resetConfirm").hidden=false;
+  });
+
   // ---------- Partie ----------
   let deck=[], idx=0, score=0, results=[], qStart=0, raf=0, timeout=0, active=false, typed="", playing=false;
   let rec=null, recStartIdx=0, recRunning=false, wantRec=false;
@@ -348,9 +445,14 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   function buildDeck(){
     const pool=[];
     [...tables].forEach(a=>{ for(let b=0;b<=MULT_MAX;b++) pool.push([a,b]); });
+    // révision : un calcul raté ou lent a jusqu'à 5 fois plus de chances de sortir, un calcul jamais vu 2 fois plus
+    const st = revise ? loadStats($("pseudo").value.trim()) : {};
+    const weights = pool.map(([a,b])=>{ if(!revise) return 1; const w=weakness(st[factKey(a,b)]); return w===null ? 2 : 1+4*w; });
+    const total = weights.reduce((x,y)=>x+y,0);
+    const pick = ()=>{ let r=Math.random()*total; for(let i=0;i<pool.length;i++){ r-=weights[i]; if(r<=0) return pool[i]; } return pool[pool.length-1]; };
     const d=[]; let last="";
     while(d.length<count){
-      const p=pool[Math.floor(Math.random()*pool.length)];
+      const p=pick();
       const key=p.join("x");
       if(key===last && pool.length>1) continue;
       // affiche dans un sens ou dans l'autre
@@ -624,12 +726,13 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 
   function showLog(){
     const has = mode==="voice" && micLog.length>0;
-    $("logCard").hidden=!has; if(!has) return;
+    $("logCard").hidden=true; $("logCard").open=false; $("showLogBtn").hidden=!has; if(!has) return;
     const codes=Object.keys(errCount);
     const sum = codes.length ? codes.map(c=>"code "+c+" ×"+errCount[c]).join(", ") : "aucune erreur";
     $("logSum").textContent="("+sum+")";
     $("logText").textContent="Erreurs : "+sum+"\n\n"+micLog.join("\n");
   }
+  $("showLogBtn").addEventListener("click",()=>{ $("showLogBtn").hidden=true; $("logCard").hidden=false; $("logCard").open=true; });
   $("copyLog").addEventListener("click",()=>{
     const txt=$("logText").textContent;
     const done=()=>{ $("copyLog").textContent="Copié !"; setTimeout(()=>$("copyLog").textContent="Copier le journal",1500); };
@@ -652,6 +755,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     $("missCard").hidden=!misses.length;
     $("missList").innerHTML="";
     misses.forEach(r=>{ const li=document.createElement("li"); li.textContent=r.a+" × "+r.b+" = "+r.ans; $("missList").appendChild(li); });
+    recordStats($("pseudo").value.trim(), results);
     const board=store.get("tx_board",[]);
     board.push({name:$("pseudo").value.trim(),score,max,date:Date.now()});
     board.sort((x,y)=>(y.score/y.max)-(x.score/x.max)||y.score-x.score);
@@ -670,7 +774,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     renderSetup(); show("setup");
   }
 
-  function show(id){ ["setup","game","result"].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
+  function show(id){ ["setup","progress","game","result"].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
 
   // Clavier
   function key(k){
