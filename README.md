@@ -4,7 +4,7 @@ Application pour apprendre les tables de multiplication de 0 à 11. L'enfant cho
 
 | Temps de réponse | Points |
 |---|---|
-| avant 1,2 seconde | 3 |
+| avant 1,3 seconde | 3 |
 | avant 2,2 secondes | 2 |
 | avant 3,2 secondes | 1 |
 | erreur ou plus de 3,2 secondes | 0 |
