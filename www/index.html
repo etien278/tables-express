@@ -490,11 +490,6 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       if(!micReadyOnce){
         $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent=""; $("fill").style.width="0";
         await new Promise(r=>{ firstReady=r; setTimeout(()=>{ firstReady=null; r(); },2000); });
-      } else if(inUtterance){
-        // une phrase (ou un bruit) est en cours : on repart sur une écoute neuve pour ce calcul
-        logMic("nouvelle écoute pour le calcul");
-        NativeSR.reset().catch(()=>{});
-        await new Promise(r=>{ readyWait=r; setTimeout(()=>{ readyWait=null; r(); },800); });
       }
       if(!playing) return;
     }

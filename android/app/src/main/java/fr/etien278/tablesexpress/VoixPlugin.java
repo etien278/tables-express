@@ -83,8 +83,9 @@ public class VoixPlugin extends Plugin {
         main.post(() -> {
             if (running) {
                 session++;
-                try { if (recognizer != null) recognizer.cancel(); } catch (Exception ignored) {}
-                listen(false);
+                try { if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); } } catch (Exception ignored) {}
+                recognizer = null;
+                restart(300, true);
             }
             call.resolve();
         });
@@ -213,7 +214,8 @@ public class VoixPlugin extends Plugin {
             if (!current()) return;
             send("result", b);
             done = true;
-            restart(100, false);
+            // un module neuf après chaque phrase : c'est ce qui marchait le mieux
+            restart(150, true);
         }
 
         @Override
@@ -226,7 +228,7 @@ public class VoixPlugin extends Plugin {
             switch (error) {
                 case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:   // rien entendu
                 case SpeechRecognizer.ERROR_NO_MATCH:         // pas compris
-                    restart(100, false);
+                    restart(150, true);
                     break;
                 case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                     running = false;
@@ -245,15 +247,18 @@ public class VoixPlugin extends Plugin {
                         restart(Math.min(2000L, 200L * failures), true);
                     }
                     break;
-                case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:  // micro occupé : on patiente sans tout recréer
-                    failures++;
-                    try { if (recognizer != null) recognizer.cancel(); } catch (Exception ignored) {}
-                    restart(Math.min(1500L, 250L * failures), failures >= 3);
-                    break;
                 default:
-                    // service coupé, client, réseau... on recrée le module
+                    // micro occupé, service coupé, client... on recrée le module en laissant souffler le téléphone
                     failures++;
-                    restart(Math.min(2000L, 300L * failures), true);
+                    if (onDevice && failures >= 4) {
+                        // la reconnaissance sur le téléphone est bloquée : on passe en ligne
+                        onDevice = false;
+                        failures = 0;
+                        JSObject m = new JSObject();
+                        m.put("mode", "en ligne (secours)");
+                        notifyListeners("mode", m);
+                    }
+                    restart(Math.min(1500L, 400L * Math.max(1, failures)), true);
             }
         }
     }
