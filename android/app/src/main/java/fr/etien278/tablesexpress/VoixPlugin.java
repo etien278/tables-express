@@ -104,6 +104,7 @@ public class VoixPlugin extends Plugin {
         if (!running) return;
         try {
             if (fresh && recognizer != null) {
+                try { recognizer.cancel(); } catch (Exception ignored) {}
                 recognizer.destroy();
                 recognizer = null;
             }
@@ -175,7 +176,8 @@ public class VoixPlugin extends Plugin {
         public void onResults(Bundle b) {
             if (!current()) return;
             send("result", b);
-            restart(0, false);
+            // un module neuf à chaque phrase : relancer l'ancien tout de suite provoque des erreurs
+            restart(120, true);
         }
 
         @Override
@@ -187,7 +189,7 @@ public class VoixPlugin extends Plugin {
             switch (error) {
                 case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:   // rien entendu
                 case SpeechRecognizer.ERROR_NO_MATCH:         // pas compris
-                    restart(0, false);
+                    restart(120, true);
                     break;
                 case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                     running = false;
@@ -195,8 +197,7 @@ public class VoixPlugin extends Plugin {
                 default:
                     // client, micro occupé, réseau... on recrée le module, avec une limite
                     failures++;
-                    if (failures <= 6) restart(failures * 250L, true);
-                    else running = false;
+                    restart(Math.min(2000L, 200L * failures), true);
             }
         }
     }
