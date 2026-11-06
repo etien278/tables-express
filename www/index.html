@@ -95,6 +95,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .miss{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .miss li{background:#fdecec;color:var(--bad);font-weight:800;border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
 .err{color:var(--bad);font-weight:700;margin:0}
+.log{white-space:pre-wrap;word-break:break-word;font-size:.75rem;line-height:1.35;max-height:50vh;overflow:auto;margin:0;padding:8px;background:var(--paper);border:1px solid var(--line-strong);border-radius:8px;font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text}
+#logCard summary{cursor:pointer}
 .heard{text-align:center;margin:-8px 0 0;min-height:1.2rem;font-size:.85rem;color:var(--ink-soft);font-style:italic}
 .fix{align-self:center;font:inherit;font-weight:800;padding:8px 16px;border-radius:999px;border:2px solid var(--good);background:var(--card);color:var(--good);cursor:pointer}
 </style>
@@ -200,6 +202,11 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
         <span class="lbl">À retravailler</span>
         <ul class="miss" id="missList"></ul>
       </div>
+      <details class="card" id="logCard" hidden>
+        <summary class="lbl">Journal du micro <span id="logSum"></span></summary>
+        <pre class="log" id="logText"></pre>
+        <button class="seg" id="copyLog">Copier le journal</button>
+      </details>
       <button class="btn" id="againBtn">Rejouer</button>
       <button class="btn alt" id="setupBtn">Changer les réglages</button>
     </div>
@@ -376,6 +383,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   }
   // ---------- Micro natif (application Android) ----------
   const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
+  // Journal du micro : ce qui s'est passé pendant la partie, pour comprendre les réponses perdues
+  let micLog=[], logStart=0, errCount={};
+  function logMic(m){ if(micLog.length<600) micLog.push(((performance.now()-logStart)/1000).toFixed(1).padStart(6," ")+"  "+m); }
+
   // Le micro écoute en continu pendant toute la partie ; chaque phrase est rattachée au calcul affiché.
   let speechAt=null, graceTimer=0, lastHeard="", utterStart=0, micReadyOnce=false, firstReady=null;
   let nativeWrongTimer=0, nativeReady=false;
@@ -409,15 +420,19 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       let perm=await NativeSR.checkPermissions();
       if(perm.micro!=="granted") perm=await NativeSR.requestPermissions();
       if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
-      await NativeSR.addListener("ready",()=>{
+      await NativeSR.addListener("ready",()=>{ logMic("micro prêt");
         utterStart=performance.now(); micState(true,"Je t'écoute");
         micReadyOnce=true; if(firstReady){ firstReady(); firstReady=null; }
       });
-      await NativeSR.addListener("speech",()=>{ utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
+      await NativeSR.addListener("speech",()=>{ logMic("parole détectée"); utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
+      await NativeSR.addListener("end",()=>{ logMic("fin de parole"); } );
       await NativeSR.addListener("end",()=>micState(true,"Je réfléchis…"));
+      await NativeSR.addListener("partial",d=>{ logMic("partiel : "+(d.matches||[]).join(" | ")); });
       await NativeSR.addListener("partial",d=>nativeHeard(d.matches,false));
-      await NativeSR.addListener("result",d=>{ if(!nativeHeard(d.matches,true) && active) speechAt=null; });
+      await NativeSR.addListener("result",d=>{ logMic("résultat : "+(d.matches||[]).join(" | ")); if(!nativeHeard(d.matches,true) && active) speechAt=null; });
       await NativeSR.addListener("error",d=>{
+        logMic("erreur "+d.code+" ("+(NATIVE_ERRORS[d.code]||d.message||"?")+")"+(active?"":" — entre deux calculs"));
+        errCount[d.code]=(errCount[d.code]||0)+1;
         if(d.code===6||d.code===7){ if(active) speechAt=null; return; }
         if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
         micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
@@ -437,6 +452,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   function currentAnswer(){ const [a,b]=deck[idx]; return a*b; }
 
   function start(){
+    micLog=[]; errCount={}; logStart=performance.now();
     const name=$("pseudo").value.trim();
     if(!name){ showErr("Écris ton pseudo pour commencer."); $("pseudo").focus(); return; }
     if(!tables.size){ showErr("Choisis au moins une table."); return; }
@@ -470,6 +486,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     }
     $("hudCount").textContent=(idx+1)+" / "+deck.length;
     $("question").textContent=a+" × "+b;
+    logMic("— calcul "+(idx+1)+" : "+a+" × "+b+" = "+(a*b));
     $("answer").textContent=""; $("feedback").textContent=""; $("feedback").className="feedback";
     $("heardText").textContent=""; $("fixBtn").hidden=true; lastHeard="";
     typed="";
@@ -534,6 +551,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     score+=pts;
     const rec_=({a,b,ans,given,t,pts});
     results.push(rec_);
+    logMic("  → "+(given===null?"rien":given)+" · "+pts+" pt · "+(t/1000).toFixed(1)+" s");
     $("feedback").textContent=msg; $("feedback").className="feedback "+cls;
     $("hudScore").textContent=score+(score>1?" pts":" pt");
     // le téléphone a mal compris ? l'enfant (ou le parent) peut corriger
@@ -562,6 +580,21 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     clearTimeout(nextTimer); const snap=idx; nextTimer=setTimeout(()=>next(snap),900);
   });
 
+  function showLog(){
+    const has = mode==="voice" && micLog.length>0;
+    $("logCard").hidden=!has; if(!has) return;
+    const codes=Object.keys(errCount);
+    const sum = codes.length ? codes.map(c=>"code "+c+" ×"+errCount[c]).join(", ") : "aucune erreur";
+    $("logSum").textContent="("+sum+")";
+    $("logText").textContent="Erreurs : "+sum+"\n\n"+micLog.join("\n");
+  }
+  $("copyLog").addEventListener("click",()=>{
+    const txt=$("logText").textContent;
+    const done=()=>{ $("copyLog").textContent="Copié !"; setTimeout(()=>$("copyLog").textContent="Copier le journal",1500); };
+    try{ navigator.clipboard.writeText(txt).then(done,()=>selectLog()); }catch(e){ selectLog(); }
+  });
+  function selectLog(){ const r=document.createRange(); r.selectNodeContents($("logText")); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); $("copyLog").textContent="Texte sélectionné : appuie sur Copier"; }
+
   function end(){
     playing=false; wantRec=false; if(rec && recRunning){ try{rec.stop();}catch(e){} }
     if(NativeSR) nativeStop();
@@ -581,6 +614,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     board.push({name:$("pseudo").value.trim(),score,max,date:Date.now()});
     board.sort((x,y)=>(y.score/y.max)-(x.score/x.max)||y.score-x.score);
     store.set("tx_board",board.slice(0,20));
+    showLog();
     show("result");
   }
 
@@ -588,6 +622,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     playing=false; active=false; wantRec=false; clearTimeout(timeout); cancelAnimationFrame(raf);
     if(rec && recRunning){ try{rec.stop();}catch(e){} }
     if(NativeSR) nativeStop();
+    clearTimeout(graceTimer); clearTimeout(nextTimer);
+    // partie arrêtée en cours : on montre le bilan (et le journal du micro) des calculs faits
+    if(results.length){ deck=deck.slice(0,results.length); end(); return; }
     renderSetup(); show("setup");
   }
 
