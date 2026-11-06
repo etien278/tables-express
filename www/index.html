@@ -221,7 +221,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 
   // Dans l'application Android, on utilise la reconnaissance vocale du téléphone
   const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const NativeSR = (IS_NATIVE && window.capacitorExports) ? window.capacitorExports.registerPlugin("SpeechRecognition") : null;
+  const NativeSR = (IS_NATIVE && window.capacitorExports) ? window.capacitorExports.registerPlugin("Voix") : null;
   const SR = NativeSR ? null : (window.SpeechRecognition || window.webkitSpeechRecognition);
   const HAS_VOICE = !!(SR || NativeSR);
   if(NativeSR){
@@ -339,40 +339,52 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     };
   }
   // ---------- Micro natif (application Android) ----------
-  let nativeOn=false, nativeWrongTimer=0, nativeReady=false;
-  function nativeHeard(matches){
-    if(!active || !matches || !matches.length) return;
+  const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
+  let nativeWrongTimer=0, nativeReady=false, nativeReadyResolve=null, nativeRetries=0;
+  function nativeHeard(matches, final){
+    if(!active || !matches || !matches.length) return false;
     const ans=currentAnswer(); let heard=null;
     for(const m of matches){ const n=parseNumber(m); if(n===null) continue; if(heard===null) heard=n; if(n===ans){ heard=n; break; } }
-    if(heard===null) return;
+    if(heard===null) return false;
     $("answer").textContent=heard;
     clearTimeout(nativeWrongTimer);
-    if(heard===ans){ finish(heard); return; }
+    if(heard===ans || final){ finish(heard); return true; }
     // « quarante » peut précéder « quarante-deux » : on attend un instant avant de compter faux
     const snap=idx; nativeWrongTimer=setTimeout(()=>{ if(active && idx===snap) finish(heard); },700);
+    return true;
   }
+  function micState(on,text){ $("dot").classList.toggle("on",on); if(text) $("micText").textContent=text; }
   async function nativeSetup(){
     if(nativeReady) return true;
     try{
       const av=await NativeSR.available();
-      if(!av.available){ $("micText").textContent="Reconnaissance vocale absente : passe au clavier."; switchToPad(); return false; }
+      if(!av.available){ micState(false,"Pas de reconnaissance vocale sur ce téléphone : passe au clavier."); switchToPad(); return false; }
       let perm=await NativeSR.checkPermissions();
-      if(perm.speechRecognition!=="granted") perm=await NativeSR.requestPermissions();
-      if(perm.speechRecognition!=="granted"){ $("micText").textContent="Micro refusé : passe au clavier."; switchToPad(); return false; }
-      await NativeSR.addListener("partialResults",d=>nativeHeard(d.matches));
-      await NativeSR.addListener("listeningState",d=>{
-        if(d.status==="stopped"){ nativeOn=false; $("dot").classList.remove("on"); if(active && mode==="voice") nativeListen(); }
+      if(perm.micro!=="granted") perm=await NativeSR.requestPermissions();
+      if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
+      await NativeSR.addListener("ready",()=>{ micState(true,"Je t'écoute"); nativeRetries=0; if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; } });
+      await NativeSR.addListener("partial",d=>nativeHeard(d.matches,false));
+      await NativeSR.addListener("result",d=>{ micState(false); if(!nativeHeard(d.matches,true) && active) nativeListen(); });
+      await NativeSR.addListener("end",()=>micState(false));
+      await NativeSR.addListener("error",d=>{
+        micState(false);
+        if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; }
+        if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
+        if(d.code!==6 && d.code!==7) micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
+        if(playing && mode==="voice" && nativeRetries<5){ nativeRetries++; setTimeout(()=>{ if(active) nativeListen(); }, d.code===8||d.code===13?400:100); }
       });
       nativeReady=true; return true;
-    }catch(e){ $("micText").textContent="Micro indisponible : passe au clavier."; switchToPad(); return false; }
+    }catch(e){ micState(false,"Micro indisponible ("+(e&&e.message||e)+") : passe au clavier."); switchToPad(); return false; }
   }
-  async function nativeListen(){
-    try{
-      await NativeSR.start({language:"fr-FR",maxResults:5,partialResults:true,popup:false});
-      nativeOn=true; $("dot").classList.add("on"); $("micText").textContent="Je t'écoute";
-    }catch(e){ nativeOn=false; }
+  // démarre l'écoute et attend que le micro soit prêt (au plus 2 secondes)
+  function nativeListen(){
+    return new Promise(res=>{
+      const t=setTimeout(()=>{ nativeReadyResolve=null; res(); },2000);
+      nativeReadyResolve=()=>{ clearTimeout(t); res(); };
+      NativeSR.start({language:"fr-FR"}).catch(e=>{ micState(false,"Micro : "+(e&&e.message||e)); clearTimeout(t); nativeReadyResolve=null; res(); });
+    });
   }
-  function nativeStop(){ clearTimeout(nativeWrongTimer); if(NativeSR){ try{ NativeSR.stop(); }catch(e){} } nativeOn=false; $("dot").classList.remove("on"); }
+  function nativeStop(){ clearTimeout(nativeWrongTimer); nativeReadyResolve=null; if(NativeSR){ NativeSR.stop().catch(()=>{}); } micState(false); }
 
   function switchToPad(){ mode="pad"; $("pad").hidden=false; $("micLine").hidden=true; }
 
@@ -407,7 +419,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent="";
       $("fill").style.width="0";
       if(!(await nativeSetup())) { if(!playing) return; }
-      else { await nativeListen(); await new Promise(r=>setTimeout(r,150)); }
+      else { nativeRetries=0; await nativeListen(); }
       if(!playing) return;
     }
     $("hudCount").textContent=(idx+1)+" / "+deck.length;

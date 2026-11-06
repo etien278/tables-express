@@ -8,8 +8,7 @@
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",
-    "@capacitor/core": "7.6.10",
-    "@capacitor-community/speech-recognition": "7.0.1"
+    "@capacitor/core": "7.6.10"
   },
   "devDependencies": {
     "@capacitor/cli": "7.6.10"
