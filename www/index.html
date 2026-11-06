@@ -393,6 +393,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   function logMic(m){ if(micLog.length<600) micLog.push(((performance.now()-logStart)/1000).toFixed(1).padStart(6," ")+"  "+m); }
 
   // Le micro écoute en continu pendant toute la partie ; chaque phrase est rattachée au calcul affiché.
+  let recoMode="", inUtterance=false, readyWait=null;
   let lastSpeechAt=null, speechAt=null, graceTimer=0, lastHeard="", utterStart=0, micReadyOnce=false, firstReady=null;
   let nativeWrongTimer=0, nativeReady=false;
   function nativeHeard(matches, final){
@@ -425,18 +426,19 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       let perm=await NativeSR.checkPermissions();
       if(perm.micro!=="granted") perm=await NativeSR.requestPermissions();
       if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
-      await NativeSR.addListener("mode",d=>logMic("reconnaissance : "+d.mode));
-      await NativeSR.addListener("ready",()=>{ logMic("micro prêt");
+      await NativeSR.addListener("mode",d=>{ recoMode=d.mode; logMic("reconnaissance : "+d.mode); });
+      await NativeSR.addListener("ready",()=>{ logMic("micro prêt"); inUtterance=false; if(readyWait){ readyWait(); readyWait=null; }
         utterStart=performance.now(); micState(true,"Je t'écoute");
         micReadyOnce=true; if(firstReady){ firstReady(); firstReady=null; }
       });
-      await NativeSR.addListener("speech",()=>{ logMic("parole détectée"); utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
+      await NativeSR.addListener("speech",()=>{ logMic("parole détectée"); inUtterance=true; utterStart=performance.now(); if(active && speechAt===null) speechAt=utterStart; });
       await NativeSR.addListener("end",()=>{ logMic("fin de parole"); } );
       await NativeSR.addListener("end",()=>micState(true,"Je réfléchis…"));
       await NativeSR.addListener("partial",d=>{ logMic("partiel : "+(d.matches||[]).join(" | ")); });
       await NativeSR.addListener("partial",d=>nativeHeard(d.matches,false));
-      await NativeSR.addListener("result",d=>{ logMic("résultat : "+(d.matches||[]).join(" | ")); if(!nativeHeard(d.matches,true) && active) speechAt=null; });
+      await NativeSR.addListener("result",d=>{ logMic("résultat : "+(d.matches||[]).join(" | ")); inUtterance=false; if(!nativeHeard(d.matches,true) && active) speechAt=null; });
       await NativeSR.addListener("error",d=>{
+        inUtterance=false;
         logMic("erreur "+d.code+" ("+(NATIVE_ERRORS[d.code]||d.message||"?")+")"+(active?"":" — entre deux calculs"));
         errCount[d.code]=(errCount[d.code]||0)+1;
         if(d.code===6||d.code===7){ if(active && speechAt!==null){ lastSpeechAt=speechAt; speechAt=null; } return; }
@@ -459,6 +461,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 
   function start(){
     micLog=[]; errCount={}; logStart=performance.now();
+    if(recoMode) logMic("reconnaissance : "+recoMode);
     const name=$("pseudo").value.trim();
     if(!name){ showErr("Écris ton pseudo pour commencer."); $("pseudo").focus(); return; }
     if(!tables.size){ showErr("Choisis au moins une table."); return; }
@@ -487,6 +490,11 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       if(!micReadyOnce){
         $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent=""; $("fill").style.width="0";
         await new Promise(r=>{ firstReady=r; setTimeout(()=>{ firstReady=null; r(); },2000); });
+      } else if(inUtterance){
+        // une phrase (ou un bruit) est en cours : on repart sur une écoute neuve pour ce calcul
+        logMic("nouvelle écoute pour le calcul");
+        NativeSR.reset().catch(()=>{});
+        await new Promise(r=>{ readyWait=r; setTimeout(()=>{ readyWait=null; r(); },800); });
       }
       if(!playing) return;
     }

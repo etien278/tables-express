@@ -77,6 +77,19 @@ public class VoixPlugin extends Plugin {
         });
     }
 
+    /** Coupe la phrase en cours et repart aussitôt sur une écoute neuve. */
+    @PluginMethod
+    public void reset(PluginCall call) {
+        main.post(() -> {
+            if (running) {
+                session++;
+                try { if (recognizer != null) recognizer.cancel(); } catch (Exception ignored) {}
+                listen(false);
+            }
+            call.resolve();
+        });
+    }
+
     @PluginMethod
     public void stop(PluginCall call) {
         main.post(() -> {
@@ -165,9 +178,10 @@ public class VoixPlugin extends Plugin {
 
     private class Listener implements RecognitionListener {
         private final int id;
+        private boolean done = false;   // résultat ou erreur déjà reçus : la suite est ignorée
         Listener(int id) { this.id = id; }
 
-        private boolean current() { return id == session; }
+        private boolean current() { return id == session && !done; }
 
         private JSObject withTime() {
             JSObject o = new JSObject();
@@ -198,20 +212,21 @@ public class VoixPlugin extends Plugin {
         public void onResults(Bundle b) {
             if (!current()) return;
             send("result", b);
-            // un module neuf à chaque phrase : relancer l'ancien tout de suite provoque des erreurs
-            restart(120, true);
+            done = true;
+            restart(100, false);
         }
 
         @Override
         public void onError(int error) {
             if (!current()) return;
+            done = true;
             JSObject ret = withTime();
             ret.put("code", error);
             notifyListeners("error", ret);
             switch (error) {
                 case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:   // rien entendu
                 case SpeechRecognizer.ERROR_NO_MATCH:         // pas compris
-                    restart(120, true);
+                    restart(100, false);
                     break;
                 case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                     running = false;
@@ -230,13 +245,15 @@ public class VoixPlugin extends Plugin {
                         restart(Math.min(2000L, 200L * failures), true);
                     }
                     break;
-                case 11: // service coupé
-                    restart(300, true);
+                case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:  // micro occupé : on patiente sans tout recréer
+                    failures++;
+                    try { if (recognizer != null) recognizer.cancel(); } catch (Exception ignored) {}
+                    restart(Math.min(1500L, 250L * failures), failures >= 3);
                     break;
                 default:
-                    // client, micro occupé, réseau... on recrée le module, avec une limite
+                    // service coupé, client, réseau... on recrée le module
                     failures++;
-                    restart(Math.min(2000L, 200L * failures), true);
+                    restart(Math.min(2000L, 300L * failures), true);
             }
         }
     }
