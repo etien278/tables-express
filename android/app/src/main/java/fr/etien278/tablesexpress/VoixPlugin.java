@@ -60,6 +60,10 @@ public class VoixPlugin extends Plugin {
                 intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
                 intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                 intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getContext().getPackageName());
+                // les réponses sont courtes : on demande un résultat dès un court silence
+                intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 600L);
+                intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 400L);
+                intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 300L);
                 recognizer.startListening(intent);
                 call.resolve();
             } catch (Exception e) {
@@ -108,7 +112,7 @@ public class VoixPlugin extends Plugin {
         }
 
         @Override public void onReadyForSpeech(Bundle params) { if (current()) notifyListeners("ready", new JSObject()); }
-        @Override public void onBeginningOfSpeech() {}
+        @Override public void onBeginningOfSpeech() { if (current()) notifyListeners("speech", new JSObject()); }
         @Override public void onRmsChanged(float rmsdB) {}
         @Override public void onBufferReceived(byte[] buffer) {}
         @Override public void onEndOfSpeech() { if (current()) notifyListeners("end", new JSObject()); }

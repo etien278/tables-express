@@ -273,7 +273,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   // ---------- Lecture des nombres dits en français ----------
   const WORDS = {zéro:0,zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,cette:7,set:7,huit:8,neuf:9,
     dix:10,dis:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,vingt:20,vingts:20,vin:20,cents:100,trente:30,
-    quarante:40,cinquante:50,soixante:60,cent:100,sans:100};
+    quarante:40,cinquante:50,soixante:60,cent:100,sans:100,
+    si:6,scie:6,sis:6,cis:6,deu:2,œuf:9,oeuf:9,saint:5,sain:5,sein:5,cet:7,vain:20,vint:20,sang:100,douce:12,seiz:16};
   function parseNumber(txt){
     txt = txt.toLowerCase();
     const digits = txt.match(/\d+/g);
@@ -340,6 +341,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   }
   // ---------- Micro natif (application Android) ----------
   const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
+  let speechAt=null, graceTimer=0;
   let nativeWrongTimer=0, nativeReady=false, nativeReadyResolve=null, nativeRetries=0;
   function nativeHeard(matches, final){
     if(!active || !matches || !matches.length) return false;
@@ -364,10 +366,12 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
       await NativeSR.addListener("ready",()=>{ micState(true,"Je t'écoute"); nativeRetries=0; if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; } });
       await NativeSR.addListener("partial",d=>nativeHeard(d.matches,false));
-      await NativeSR.addListener("result",d=>{ micState(false); if(!nativeHeard(d.matches,true) && active) nativeListen(); });
+      await NativeSR.addListener("result",d=>{ micState(false); if(!nativeHeard(d.matches,true) && active){ speechAt=null; nativeListen(); } });
       await NativeSR.addListener("end",()=>micState(false));
+      await NativeSR.addListener("speech",()=>{ if(active && speechAt===null) speechAt=performance.now(); });
       await NativeSR.addListener("error",d=>{
         micState(false);
+        if(active && (d.code===6||d.code===7)) speechAt=null;
         if(nativeReadyResolve){ nativeReadyResolve(); nativeReadyResolve=null; }
         if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
         if(d.code!==6 && d.code!==7) micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
@@ -428,9 +432,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     typed="";
     // les nouveaux résultats arrivent après ceux déjà entendus : l'index est fixé au premier événement
     if(rec && recRunning){ recStartIdx = Infinity; }
-    active=true; qStart=performance.now();
+    active=true; qStart=performance.now(); speechAt=null; clearTimeout(graceTimer);
     cancelAnimationFrame(raf); loop();
-    clearTimeout(timeout); timeout=setTimeout(()=>finish(null),LIMIT);
+    clearTimeout(timeout); timeout=setTimeout(onLimit,LIMIT);
   }
 
   // Index de départ : on mémorise le nombre de résultats au moment de la question
@@ -453,6 +457,17 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     rec._patched=true;
   }
 
+  // À 3 s : si l'enfant a commencé à parler à temps, on laisse au téléphone le temps de comprendre
+  function onLimit(){
+    if(!active) return;
+    if(NativeSR && speechAt!==null && speechAt-qStart<LIMIT){
+      micState(true,"Je réfléchis…");
+      graceTimer=setTimeout(()=>finish(null),1800);
+      return;
+    }
+    finish(null);
+  }
+
   function loop(){
     const t=performance.now()-qStart;
     const p=Math.min(1,t/LIMIT);
@@ -463,8 +478,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 
   function finish(given){
     if(!active) return;
-    active=false; clearTimeout(timeout); cancelAnimationFrame(raf);
-    const t=performance.now()-qStart;
+    active=false; clearTimeout(timeout); clearTimeout(graceTimer); cancelAnimationFrame(raf);
+    // dans l'appli, le temps compté est celui où l'enfant a commencé à répondre
+    const t=(NativeSR && given!==null && speechAt!==null) ? speechAt-qStart : performance.now()-qStart;
     if(NativeSR) nativeStop();
     const ans=currentAnswer(); const [a,b]=deck[idx];
     let pts=0, cls="ko", msg;
