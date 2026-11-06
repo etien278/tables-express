@@ -1,5 +1,5 @@
 // Tables Express : fonctionne hors ligne une fois installée
-const CACHE = "tables-express-v17";
+const CACHE = "tables-express-v18";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,11 @@ const SHELL = [
   "./icons/maskable-192.png",
   "./icons/maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "./vendor/capacitor.js"
+  "./vendor/capacitor.js",
+  "./firebase-config.js",
+  "./vendor/firebase/firebase-app-compat.js",
+  "./vendor/firebase/firebase-auth-compat.js",
+  "./vendor/firebase/firebase-firestore-compat.js"
 ];
 
 self.addEventListener("install", e => {

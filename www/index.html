@@ -107,6 +107,14 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .tablestats .track i{display:block;height:100%;border-radius:6px}
 .tablestats .val{font-size:.8rem;color:var(--ink-soft);text-align:right}
 .linkbtn{align-self:center;font:inherit;font-size:.85rem;color:var(--ink-soft);background:none;border:none;text-decoration:underline;cursor:pointer;padding:4px}
+.fcode{font-family:var(--display);font-weight:800;font-size:2.2rem;letter-spacing:.06em;color:var(--ink);text-align:center;user-select:all;-webkit-user-select:all}
+.fboard{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;counter-reset:rk}
+.fboard li{counter-increment:rk;display:grid;grid-template-columns:2rem 1fr auto;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--paper);border:1px solid var(--line-strong);font-weight:700;font-variant-numeric:tabular-nums}
+.fboard li::before{content:counter(rk);font-family:var(--display);font-weight:800;color:var(--ink-soft);text-align:center}
+.fboard li.me{border:2px solid var(--ink);background:#e8eefc}
+.fboard .fn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.fboard .fs{text-align:right;font-size:.85rem;color:var(--ink-soft)}
+.fboard .fs b{font-family:var(--display);font-size:1.15rem;color:var(--ink)}
 .heard{text-align:center;margin:-8px 0 0;min-height:1.2rem;font-size:.85rem;color:var(--ink-soft);font-style:italic}
 .fix{align-self:center;font:inherit;font-weight:800;padding:8px 16px;border-radius:999px;border:2px solid var(--good);background:var(--card);color:var(--good);cursor:pointer}
 </style>
@@ -164,7 +172,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       <p class="err" id="setupErr" hidden></p>
       <button class="btn alt" id="installBtn" hidden style="font-size:1.05rem;padding:10px">Installer l'application</button>
       <button class="btn" id="startBtn">C'est parti !</button>
-      <button class="btn alt" id="progressBtn" style="font-size:1.05rem;padding:10px">Mes progrès</button>
+      <div class="row">
+        <button class="btn alt" id="progressBtn" style="flex:1;font-size:1.05rem;padding:10px">Mes progrès</button>
+        <button class="btn alt" id="friendsBtn" style="flex:1;font-size:1.05rem;padding:10px">Mes copains</button>
+      </div>
 
       <div class="card" id="boardCard" hidden>
         <span class="lbl">Meilleurs scores sur cet appareil</span>
@@ -192,6 +203,36 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       <button class="btn alt" id="resetStats" style="font-size:.95rem;padding:8px">Effacer les progrès de ce pseudo</button>
       <p class="small" id="resetConfirm" hidden></p>
       <button class="btn" id="progBack">Retour</button>
+    </div>
+  </section>
+
+  <!-- ÉCRAN COPAINS -->
+  <section id="friends" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <header>
+        <h1>Mes copains</h1>
+        <p class="sub">Classement de la semaine, du lundi au dimanche.</p>
+      </header>
+      <p class="err" id="fErr" hidden></p>
+      <div class="card" id="fCodeCard">
+        <span class="lbl">Mon code ami</span>
+        <div class="fcode" id="fMyCode">…</div>
+        <p class="small">Donne ce code à tes copains pour qu'ils t'ajoutent.</p>
+      </div>
+      <div class="card" id="fAddCard">
+        <label class="lbl" for="fAddInput">Ajouter un copain</label>
+        <div class="row">
+          <input type="text" id="fAddInput" placeholder="ex. LUCA-4821" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:0;text-transform:uppercase">
+          <button class="seg" id="fAddBtn" style="flex:0 0 auto">Ajouter</button>
+        </div>
+        <p class="small" id="fAddMsg"></p>
+      </div>
+      <div class="card" id="fBoardCard">
+        <span class="lbl">Classement</span>
+        <ol class="fboard" id="fBoard"></ol>
+        <p class="small">Points gagnés cette semaine, et meilleure partie en pourcentage.</p>
+      </div>
+      <button class="btn" id="fBack">Retour</button>
     </div>
   </section>
 
@@ -253,6 +294,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 </div>
 
 <script src="vendor/capacitor.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -436,6 +478,136 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     if(!resetArmed){ resetArmed=true; $("resetStats").textContent="Appuie encore pour confirmer"; return; }
     saveStats($("pseudo").value.trim(),{}); renderProgress();
     $("resetConfirm").textContent="Progrès effacés."; $("resetConfirm").hidden=false;
+  });
+
+  // ---------- En ligne : code ami et classement entre copains (Firebase) ----------
+  const Online = (()=>{
+    let db=null, auth=null, readyP=null;
+    const enabled = ()=>!!window.TX_FIREBASE;
+    const loadScript = src => new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src=src; sc.onload=res; sc.onerror=()=>rej(new Error("chargement")); document.head.appendChild(sc); });
+    function ready(){
+      if(!enabled()) return Promise.reject(new Error("off"));
+      if(!readyP) readyP=(async()=>{
+        await loadScript("vendor/firebase/firebase-app-compat.js");
+        await loadScript("vendor/firebase/firebase-auth-compat.js");
+        await loadScript("vendor/firebase/firebase-firestore-compat.js");
+        firebase.initializeApp(window.TX_FIREBASE);
+        auth=firebase.auth(); db=firebase.firestore();
+        if(!auth.currentUser) await new Promise(r=>{ const off=auth.onAuthStateChanged(u=>{ off(); r(u); }); });
+        if(!auth.currentUser) await auth.signInAnonymously();
+      })().catch(e=>{ readyP=null; throw e; });
+      return readyP;
+    }
+    const slug = name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24) || "joueur";
+    const pid = name => auth.currentUser.uid+"_"+slug(name);
+    function weekId(d=new Date()){
+      const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+      const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day);
+      const y0=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+      return t.getUTCFullYear()+"-S"+String(Math.ceil(((t-y0)/864e5+1)/7)).padStart(2,"0");
+    }
+    // crée le profil et réserve un code ami unique au premier passage
+    async function profile(name){
+      await ready();
+      const ref=db.collection("players").doc(pid(name));
+      const snap=await ref.get();
+      if(snap.exists && snap.data().code) return {ref, data:snap.data()};
+      const prefix=(slug(name).replace(/[^a-z]/g,"").slice(0,4)||"AMI").toUpperCase();
+      for(let i=0;i<8;i++){
+        const code=prefix+"-"+String(Math.floor(1000+Math.random()*9000));
+        const cref=db.collection("codes").doc(code);
+        try{
+          await db.runTransaction(async tx=>{
+            const c=await tx.get(cref);
+            if(c.exists) throw new Error("pris");
+            tx.set(cref,{owner:ref.id});
+            tx.set(ref,{pseudo:name.slice(0,20),code,weekId:weekId(),weekPts:0,bestPct:0,games:0,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+          });
+          return {ref, data:(await ref.get()).data()};
+        }catch(e){ if(e.message!=="pris") throw e; }
+      }
+      throw new Error("code");
+    }
+    // envoie la partie terminée : points de la semaine et meilleure partie
+    async function sendGame(name, pts, max){
+      if(!enabled() || !max) return;
+      const {ref}=await profile(name);
+      const wk=weekId(); const pct=Math.round(100*pts/max);
+      await db.runTransaction(async tx=>{
+        const d=(await tx.get(ref)).data();
+        const weekPts=(d.weekId===wk ? d.weekPts : 0)+pts;
+        tx.update(ref,{pseudo:name.slice(0,20),weekId:wk,weekPts,bestPct:Math.max(d.bestPct||0,pct),games:(d.games||0)+1,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      });
+    }
+    async function addFriend(name, code){
+      const me=await profile(name);
+      code=code.trim().toUpperCase().replace(/\s+/g,"");
+      if(!/^[A-Z]{1,4}-[0-9]{4}$/.test(code)) throw new Error("format");
+      if(code===me.data.code) throw new Error("moi");
+      const c=await db.collection("codes").doc(code).get();
+      if(!c.exists) throw new Error("inconnu");
+      const other=c.data().owner;
+      const batch=db.batch();
+      batch.set(me.ref.collection("friends").doc(other),{since:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.set(db.collection("players").doc(other).collection("friends").doc(me.ref.id),{since:firebase.firestore.FieldValue.serverTimestamp()});
+      await batch.commit();
+      const o=await db.collection("players").doc(other).get();
+      return o.exists ? o.data().pseudo : code;
+    }
+    async function board(name){
+      const me=await profile(name);
+      const fs=await me.ref.collection("friends").get();
+      const docs=await Promise.all(fs.docs.map(f=>db.collection("players").doc(f.id).get()));
+      const wk=weekId();
+      const rows=[me.ref.id, ...docs.filter(d=>d.exists).map(d=>d.id)].map((id,i)=>{
+        const d = i===0 ? me.data : docs.find(x=>x.id===id).data();
+        return {id, me:i===0, pseudo:d.pseudo, week:(d.weekId===wk?d.weekPts:0), best:d.bestPct||0};
+      });
+      rows.sort((a,b)=>b.week-a.week || b.best-a.best);
+      return {code:me.data.code, rows};
+    }
+    return {enabled, sendGame, addFriend, board, profile};
+  })();
+
+  function friendErr(e){
+    const m=e && e.message;
+    if(m==="off") return "La partie en ligne n'est pas encore activée.";
+    if(m==="format") return "Le code ressemble à LUCA-4821 : des lettres, un tiret et 4 chiffres.";
+    if(m==="moi") return "C'est ton propre code !";
+    if(m==="inconnu") return "Aucun copain n'a ce code. Vérifie-le.";
+    return "Connexion impossible. Vérifie internet, puis réessaie.";
+  }
+  async function renderFriends(){
+    const name=$("pseudo").value.trim();
+    $("fErr").hidden=true; $("fAddMsg").textContent="";
+    if(!Online.enabled()){ $("fErr").textContent=friendErr({message:"off"}); $("fErr").hidden=false; $("fCodeCard").hidden=$("fAddCard").hidden=$("fBoardCard").hidden=true; return; }
+    $("fCodeCard").hidden=$("fAddCard").hidden=$("fBoardCard").hidden=false;
+    $("fMyCode").textContent="…"; $("fBoard").innerHTML="";
+    try{
+      const b=await Online.board(name);
+      $("fMyCode").textContent=b.code;
+      b.rows.forEach(r=>{
+        const li=document.createElement("li"); if(r.me) li.className="me";
+        const n=document.createElement("span"); n.className="fn"; n.textContent=r.pseudo+(r.me?" (toi)":"");
+        const sc=document.createElement("span"); sc.className="fs";
+        const w=document.createElement("b"); w.textContent=r.week+" pts";
+        sc.append(w, document.createTextNode(" · "+r.best+" %"));
+        li.append(n,sc); $("fBoard").appendChild(li);
+      });
+      if(b.rows.length===1){ const p=document.createElement("p"); p.className="small"; p.textContent="Ajoute un copain avec son code pour comparer vos scores."; $("fBoard").appendChild(p); }
+    }catch(e){ $("fErr").textContent=friendErr(e); $("fErr").hidden=false; }
+  }
+  $("friendsBtn").addEventListener("click",()=>{
+    if(!$("pseudo").value.trim()){ showErr("Écris ton pseudo pour retrouver tes copains."); $("pseudo").focus(); return; }
+    $("setupErr").hidden=true; store.set("tx_pseudo",$("pseudo").value.trim()); show("friends"); renderFriends();
+  });
+  $("fBack").addEventListener("click",()=>{ renderSetup(); show("setup"); });
+  $("fAddBtn").addEventListener("click",async()=>{
+    const code=$("fAddInput").value; if(!code.trim()) return;
+    $("fAddBtn").disabled=true; $("fAddMsg").textContent="Recherche…";
+    try{ const who=await Online.addFriend($("pseudo").value.trim(), code); $("fAddInput").value=""; $("fAddMsg").textContent=who+" est maintenant dans tes copains !"; renderFriends().then(()=>{ $("fAddMsg").textContent=who+" est maintenant dans tes copains !"; }); }
+    catch(e){ $("fAddMsg").textContent=friendErr(e); }
+    $("fAddBtn").disabled=false;
   });
 
   // ---------- Partie ----------
@@ -756,6 +928,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     $("missList").innerHTML="";
     misses.forEach(r=>{ const li=document.createElement("li"); li.textContent=r.a+" × "+r.b+" = "+r.ans; $("missList").appendChild(li); });
     recordStats($("pseudo").value.trim(), results);
+    Online.sendGame($("pseudo").value.trim(), score, max).catch(()=>{});
     const board=store.get("tx_board",[]);
     board.push({name:$("pseudo").value.trim(),score,max,date:Date.now()});
     board.sort((x,y)=>(y.score/y.max)-(x.score/x.max)||y.score-x.score);
@@ -774,7 +947,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     renderSetup(); show("setup");
   }
 
-  function show(id){ ["setup","progress","game","result"].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
+  function show(id){ ["setup","progress","friends","game","result"].forEach(s=>$(s).hidden = s!==id); window.scrollTo(0,0); }
 
   // Clavier
   function key(k){
