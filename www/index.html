@@ -54,6 +54,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:#fff}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .seg{flex:1;min-width:80px;font:inherit;font-weight:800;padding:10px;border-radius:10px;border:2px solid var(--line-strong);background:var(--paper);color:var(--ink-soft);cursor:pointer}
+#countRow .seg,#modeRow .seg{min-width:0}
 .seg[aria-pressed=true]{border-color:var(--ink);color:var(--ink);background:#e8eefc}
 .small{font-size:.85rem;color:var(--ink-soft);margin:0}
 .btn{font-family:var(--display);font-weight:800;font-size:1.4rem;padding:14px;border:none;border-radius:12px;background:var(--margin);color:#fff;cursor:pointer;box-shadow:0 4px 0 #b53a40}
@@ -182,6 +183,7 @@ body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--ad-h,0px))}
         <span class="lbl">Meilleurs scores sur cet appareil</span>
         <ul class="board" id="board"></ul>
       </div>
+      <a class="linkbtn" href="confidentialite.html" style="text-align:center">Confidentialité</a>
     </div>
   </section>
 

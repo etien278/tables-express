@@ -1,5 +1,5 @@
 // Tables Express : fonctionne hors ligne une fois installée
-const CACHE = "tables-express-v22";
+const CACHE = "tables-express-v24";
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +11,7 @@ const SHELL = [
   "./icons/apple-touch-icon.png",
   "./vendor/capacitor.js",
   "./firebase-config.js",
+  "./confidentialite.html",
   "./vendor/firebase/firebase-app-compat.js",
   "./vendor/firebase/firebase-auth-compat.js",
   "./vendor/firebase/firebase-firestore-compat.js"
