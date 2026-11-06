@@ -95,6 +95,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .miss{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .miss li{background:#fdecec;color:var(--bad);font-weight:800;border-radius:8px;padding:4px 10px;font-variant-numeric:tabular-nums}
 .err{color:var(--bad);font-weight:700;margin:0}
+.heard{text-align:center;margin:-8px 0 0;min-height:1.2rem;font-size:.85rem;color:var(--ink-soft);font-style:italic}
+.fix{align-self:center;font:inherit;font-weight:800;padding:8px 16px;border-radius:999px;border:2px solid var(--good);background:var(--card);color:var(--good);cursor:pointer}
 </style>
 </head>
 <body>
@@ -169,6 +171,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       </div>
       <div class="answer" id="answer"></div>
       <div class="feedback" id="feedback"></div>
+      <p class="heard" id="heardText"></p>
+      <button class="fix" id="fixBtn" hidden>J'avais dit juste</button>
       <div class="mic" id="micLine"><span class="dot" id="dot"></span><span id="micText">Micro en attente</span></div>
       <div class="pad" id="pad" hidden>
         <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
@@ -293,6 +297,37 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     return found?cur:null;
   }
 
+  // Toutes les lectures possibles : « 40 2 », « six fois sept quarante-deux »...
+  function wordRuns(txt){
+    const toks=txt.toLowerCase().replace(/[-'’]/g," ").split(/\s+/).filter(Boolean);
+    const runs=[]; let cur=0, found=false, prev=null;
+    const close=()=>{ if(found) runs.push(cur); cur=0; found=false; prev=null; };
+    for(const w of toks){
+      if(w==="et" && found) continue;
+      if(/^\d+$/.test(w)){ close(); runs.push(parseInt(w,10)); continue; }
+      if(!(w in WORDS)){ close(); continue; }
+      const v=WORDS[w];
+      if(v===100) cur=(cur||1)*100;
+      else if(v===20 && prev===4) cur=cur-4+80;
+      else if(found && prev!==null && v<10 && prev<10 && prev!==4){ close(); cur=v; }
+      else if(found && prev!==null && v>=10 && v<100 && prev<20){ close(); cur=v; }
+      else cur+=v;
+      found=true; prev=v;
+    }
+    close();
+    return runs;
+  }
+  function candidates(txt){
+    const out=new Set();
+    const one=parseNumber(txt); if(one!==null) out.add(one);
+    const digits=(txt.match(/\d+/g)||[]).map(Number);
+    if(digits.length>1){ out.add(Number(digits.join(""))); out.add(digits.reduce((x,y)=>x+y,0)); }
+    const runs=wordRuns(txt);
+    runs.forEach(n=>out.add(n));
+    if(runs.length>1) out.add(runs.reduce((x,y)=>x+y,0));
+    return [...out];
+  }
+
   // ---------- Partie ----------
   let deck=[], idx=0, score=0, results=[], qStart=0, raf=0, timeout=0, active=false, typed="", playing=false;
   let rec=null, recStartIdx=0, recRunning=false, wantRec=false;
@@ -341,12 +376,19 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   }
   // ---------- Micro natif (application Android) ----------
   const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
-  let speechAt=null, graceTimer=0;
+  let speechAt=null, graceTimer=0, lastHeard="";
   let nativeWrongTimer=0, nativeReady=false, nativeReadyResolve=null, nativeRetries=0;
   function nativeHeard(matches, final){
     if(!active || !matches || !matches.length) return false;
     const ans=currentAnswer(); let heard=null;
-    for(const m of matches){ const n=parseNumber(m); if(n===null) continue; if(heard===null) heard=n; if(n===ans){ heard=n; break; } }
+    $("heardText").textContent="Entendu : « "+matches[0]+" »";
+    lastHeard=matches[0];
+    outer: for(const m of matches){
+      const runs=wordRuns(m);
+      const main=runs.length?runs[runs.length-1]:parseNumber(m);
+      if(main!==null && heard===null) heard=main;
+      for(const n of candidates(m)){ if(n===ans){ heard=n; break outer; } }
+    }
     if(heard===null) return false;
     $("answer").textContent=heard;
     clearTimeout(nativeWrongTimer);
@@ -429,6 +471,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     $("hudCount").textContent=(idx+1)+" / "+deck.length;
     $("question").textContent=a+" × "+b;
     $("answer").textContent=""; $("feedback").textContent=""; $("feedback").className="feedback";
+    $("heardText").textContent=""; $("fixBtn").hidden=true; lastHeard="";
     typed="";
     // les nouveaux résultats arrivent après ceux déjà entendus : l'index est fixé au premier événement
     if(rec && recRunning){ recStartIdx = Infinity; }
@@ -489,15 +532,35 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     else if(t>LIMIT){ msg="Juste, mais trop tard"; cls="late"; }
     else { pts = t<=1000?3:t<=2000?2:1; cls="ok"; msg="+"+pts+(pts>1?" pts":" pt")+" · "+(t/1000).toFixed(1).replace(".",",")+" s"; }
     score+=pts;
-    results.push({a,b,ans,given,t,pts});
+    const rec_=({a,b,ans,given,t,pts});
+    results.push(rec_);
     $("feedback").textContent=msg; $("feedback").className="feedback "+cls;
     $("hudScore").textContent=score+(score>1?" pts":" pt");
-    setTimeout(()=>{
-      if(!playing) return;
-      idx++;
-      if(idx<deck.length) ask(); else end();
-    }, pts>0?900:1800);
+    // le téléphone a mal compris ? l'enfant (ou le parent) peut corriger
+    const canFix = pts===0 && mode==="voice" && (given!==null || speechAt!==null);
+    $("fixBtn").hidden=!canFix;
+    fixFor = canFix ? {rec:rec_, t:(speechAt!==null? speechAt-qStart : t)} : null;
+    const snap=idx;
+    nextTimer=setTimeout(()=>next(snap), pts>0?900:(canFix?2600:1800));
   }
+  let fixFor=null, nextTimer=0;
+  function next(snap){
+    if(!playing || idx!==snap) return;
+    $("fixBtn").hidden=true; fixFor=null;
+    idx++;
+    if(idx<deck.length) ask(); else end();
+  }
+  $("fixBtn").addEventListener("click",()=>{
+    if(!fixFor) return;
+    const {rec:r,t}=fixFor; fixFor=null;
+    const pts = t<=1000?3:t<=2000?2:t<=LIMIT?1:0;
+    r.pts=pts; r.given=r.ans; r.fixed=true; score+=pts;
+    $("hudScore").textContent=score+(score>1?" pts":" pt");
+    $("feedback").textContent = pts? "Corrigé : +"+pts+(pts>1?" pts":" pt") : "Corrigé, mais trop tard";
+    $("feedback").className="feedback "+(pts?"ok":"late");
+    $("fixBtn").hidden=true;
+    clearTimeout(nextTimer); const snap=idx; nextTimer=setTimeout(()=>next(snap),900);
+  });
 
   function end(){
     playing=false; wantRec=false; if(rec && recRunning){ try{rec.stop();}catch(e){} }
