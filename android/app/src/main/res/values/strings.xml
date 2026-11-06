@@ -4,4 +4,6 @@
     <string name="title_activity_main">Tables Express</string>
     <string name="package_name">fr.etien278.tablesexpress</string>
     <string name="custom_url_scheme">fr.etien278.tablesexpress</string>
+    <!-- Identifiant AdMob de test fourni par Google : à remplacer par celui de ton compte AdMob -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>
