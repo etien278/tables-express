@@ -2,6 +2,7 @@ package fr.etien278.tablesexpress;
 
 import android.Manifest;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -39,6 +40,17 @@ public class VoixPlugin extends Plugin {
     private boolean running = false;
     private String lang = "fr-FR";
     private int failures = 0;
+    // reconnaissance sur le téléphone (plus rapide, guidée vers les nombres) si disponible
+    private boolean onDevice = false;
+    private boolean onDeviceTried = false;
+
+    private static final ArrayList<String> NUMBERS = new ArrayList<>();
+    static {
+        String[] w = {"zéro","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix","onze","douze",
+            "treize","quatorze","quinze","seize","vingt","trente","quarante","cinquante","soixante",
+            "soixante-dix","quatre-vingt","quatre-vingt-dix","cent","cent dix","cent vingt et un"};
+        for (String x : w) NUMBERS.add(x);
+    }
 
     @PluginMethod
     public void available(PluginCall call) {
@@ -103,28 +115,38 @@ public class VoixPlugin extends Plugin {
     private void listen(boolean fresh) {
         if (!running) return;
         try {
+            // nouveau numéro d'abord : les messages de l'ancien module seront ignorés
+            final int id = ++session;
             if (fresh && recognizer != null) {
                 try { recognizer.cancel(); } catch (Exception ignored) {}
                 recognizer.destroy();
                 recognizer = null;
             }
             if (recognizer == null) {
-                recognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
+                if (!onDeviceTried) {
+                    onDeviceTried = true;
+                    onDevice = Build.VERSION.SDK_INT >= 33 && SpeechRecognizer.isOnDeviceRecognitionAvailable(getContext());
+                    JSObject m = new JSObject();
+                    m.put("mode", onDevice ? "téléphone" : "en ligne");
+                    notifyListeners("mode", m);
+                }
+                recognizer = (onDevice && Build.VERSION.SDK_INT >= 33)
+                    ? SpeechRecognizer.createOnDeviceSpeechRecognizer(getContext())
+                    : SpeechRecognizer.createSpeechRecognizer(getContext());
             }
-            final int id = ++session;
             recognizer.setRecognitionListener(new Listener(id));
 
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            // modèle « recherche » : meilleur pour les mots isolés comme « zéro » ou « neuf »
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
             intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getContext().getPackageName());
-            // les réponses sont courtes : on demande un résultat dès un court silence
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 600L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 400L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 300L);
+            if (onDevice && Build.VERSION.SDK_INT >= 33) {
+                intent.putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, NUMBERS);
+            }
             recognizer.startListening(intent);
         } catch (Exception e) {
             JSObject ret = new JSObject();
@@ -193,6 +215,23 @@ public class VoixPlugin extends Plugin {
                     break;
                 case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
                     running = false;
+                    break;
+                case 12: // langue non prise en charge
+                case 13: // langue pas encore téléchargée
+                    if (onDevice) {
+                        // le français n'est pas installé sur le téléphone : on passe en ligne
+                        onDevice = false;
+                        JSObject m = new JSObject();
+                        m.put("mode", "en ligne");
+                        notifyListeners("mode", m);
+                        restart(150, true);
+                    } else {
+                        failures++;
+                        restart(Math.min(2000L, 200L * failures), true);
+                    }
+                    break;
+                case 11: // service coupé
+                    restart(300, true);
                     break;
                 default:
                     // client, micro occupé, réseau... on recrée le module, avec une limite

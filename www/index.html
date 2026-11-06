@@ -72,7 +72,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .hud .score{font-family:var(--display);font-size:1.6rem;color:var(--ink)}
 .question{font-family:var(--display);font-weight:800;color:var(--ink);font-size:clamp(4rem,22vw,7rem);text-align:center;line-height:1;margin:8px 0 0;font-variant-numeric:tabular-nums}
 .answer{min-height:3.2rem;text-align:center;font-family:var(--display);font-size:2.4rem;font-weight:800;color:var(--ink-soft)}
-.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:repeat(3,1fr)}
+.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:2fr 1fr 1fr}
+.count{align-self:center;min-width:3.2rem;height:3.2rem;padding:0 10px;border-radius:999px;border:3px solid currentColor;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1;color:var(--good);font-variant-numeric:tabular-nums;margin-bottom:-6px}
+.count:empty{visibility:hidden}
+.count.done{color:var(--margin)}
 .bar span{position:relative;font-size:.7rem;font-weight:800;color:var(--ink-soft);display:grid;place-items:center;z-index:1;border-right:2px solid var(--paper)}
 .bar span:last-child{border-right:none}
 .fill{position:absolute;inset:0 auto 0 0;width:0;background:var(--good);transition:background .2s}
@@ -141,11 +144,11 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       </div>
 
       <div class="rules" aria-label="Barème">
-        <div class="r3">3 pts<small>moins d'1 s</small></div>
-        <div class="r2">2 pts<small>moins de 2 s</small></div>
-        <div class="r1">1 pt<small>moins de 3 s</small></div>
+        <div class="r3">3 pts<small>pendant 0 et 1</small></div>
+        <div class="r2">2 pts<small>pendant 2</small></div>
+        <div class="r1">1 pt<small>pendant 3</small></div>
       </div>
-      <p class="small" style="text-align:center">Erreur ou plus de 3 secondes : 0 point.</p>
+      <p class="small" style="text-align:center">Le compteur fait 0, 1, 2, 3… puis « Fini ! ». Erreur ou trop tard : 0 point.</p>
 
       <p class="err" id="setupErr" hidden></p>
       <button class="btn alt" id="installBtn" hidden style="font-size:1.05rem;padding:10px">Installer l'application</button>
@@ -167,6 +170,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
         <span class="score" id="hudScore">0 pt</span>
       </div>
       <div class="question" id="question">Prêt ?</div>
+      <div class="count" id="count" aria-live="off"></div>
       <div class="bar" aria-hidden="true">
         <div class="fill" id="fill"></div>
         <span>3 pts</span><span>2 pts</span><span>1 pt</span>
@@ -217,7 +221,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const LIMIT = 3000;               // 3 secondes
+  const LIMIT = 4000;               // compteur 0, 1, 2, 3 puis fini
+  const pointsFor = t => t<2000?3 : t<3000?2 : t<LIMIT?1 : 0;
   const MULT_MAX = 10;              // multiplicateur de 0 à 10
   const store = {
     get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
@@ -382,13 +387,13 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     };
   }
   // ---------- Micro natif (application Android) ----------
-  const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",11:"langue non disponible",12:"langue non disponible",13:"service occupé"};
+  const NATIVE_ERRORS={1:"réseau lent",2:"réseau",3:"audio",4:"serveur",5:"client",6:"rien entendu",7:"pas compris",8:"micro occupé",9:"autorisation manquante",10:"trop de demandes",11:"service coupé",12:"langue non prise en charge",13:"français non téléchargé"};
   // Journal du micro : ce qui s'est passé pendant la partie, pour comprendre les réponses perdues
   let micLog=[], logStart=0, errCount={};
   function logMic(m){ if(micLog.length<600) micLog.push(((performance.now()-logStart)/1000).toFixed(1).padStart(6," ")+"  "+m); }
 
   // Le micro écoute en continu pendant toute la partie ; chaque phrase est rattachée au calcul affiché.
-  let speechAt=null, graceTimer=0, lastHeard="", utterStart=0, micReadyOnce=false, firstReady=null;
+  let lastSpeechAt=null, speechAt=null, graceTimer=0, lastHeard="", utterStart=0, micReadyOnce=false, firstReady=null;
   let nativeWrongTimer=0, nativeReady=false;
   function nativeHeard(matches, final){
     if(!active || !matches || !matches.length) return false;
@@ -420,6 +425,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       let perm=await NativeSR.checkPermissions();
       if(perm.micro!=="granted") perm=await NativeSR.requestPermissions();
       if(perm.micro!=="granted"){ micState(false,"Micro refusé : passe au clavier."); switchToPad(); return false; }
+      await NativeSR.addListener("mode",d=>logMic("reconnaissance : "+d.mode));
       await NativeSR.addListener("ready",()=>{ logMic("micro prêt");
         utterStart=performance.now(); micState(true,"Je t'écoute");
         micReadyOnce=true; if(firstReady){ firstReady(); firstReady=null; }
@@ -433,7 +439,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       await NativeSR.addListener("error",d=>{
         logMic("erreur "+d.code+" ("+(NATIVE_ERRORS[d.code]||d.message||"?")+")"+(active?"":" — entre deux calculs"));
         errCount[d.code]=(errCount[d.code]||0)+1;
-        if(d.code===6||d.code===7){ if(active) speechAt=null; return; }
+        if(d.code===6||d.code===7){ if(active && speechAt!==null){ lastSpeechAt=speechAt; speechAt=null; } return; }
         if(d.code===9){ micState(false,"Autorisation du micro manquante : passe au clavier."); switchToPad(); return; }
         micState(false,"Micro : "+(NATIVE_ERRORS[d.code]||"erreur")+" (code "+d.code+")");
       });
@@ -492,7 +498,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     typed="";
     // les nouveaux résultats arrivent après ceux déjà entendus : l'index est fixé au premier événement
     if(rec && recRunning){ recStartIdx = Infinity; }
-    active=true; qStart=performance.now(); speechAt=null; clearTimeout(graceTimer);
+    active=true; qStart=performance.now(); speechAt=null; lastSpeechAt=null; clearTimeout(graceTimer);
+    $("count").textContent="0"; $("count").classList.remove("done");
     cancelAnimationFrame(raf); loop();
     clearTimeout(timeout); timeout=setTimeout(onLimit,LIMIT);
   }
@@ -520,6 +527,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   // À 3 s : si l'enfant a commencé à parler à temps, on laisse au téléphone le temps de comprendre
   function onLimit(){
     if(!active) return;
+    $("count").textContent="Fini !"; $("count").classList.add("done");
     if(NativeSR && speechAt!==null && speechAt-qStart<LIMIT){
       micState(true,"Je réfléchis…");
       graceTimer=setTimeout(()=>finish(null),1800);
@@ -532,7 +540,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     const t=performance.now()-qStart;
     const p=Math.min(1,t/LIMIT);
     const f=$("fill"); f.style.width=(p*100)+"%";
-    f.style.background = t<1000?"var(--good)":t<2000?"var(--mid)":"var(--margin)";
+    f.style.background = t<2000?"var(--good)":t<3000?"var(--mid)":"var(--margin)";
+    $("count").textContent = t<LIMIT ? String(Math.floor(t/1000)) : "Fini !";
+    $("count").style.color = t<2000?"var(--good)":t<3000?"var(--mid)":"var(--margin)";
+    $("count").classList.toggle("done", t>=LIMIT);
     if(active && p<1) raf=requestAnimationFrame(loop);
   }
 
@@ -547,7 +558,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     if(given===null){ msg="Trop tard ! "+a+" × "+b+" = "+ans; cls="late"; }
     else if(given!==ans){ msg="Non, "+a+" × "+b+" = "+ans; }
     else if(t>LIMIT){ msg="Juste, mais trop tard"; cls="late"; }
-    else { pts = t<=1000?3:t<=2000?2:1; cls="ok"; msg="+"+pts+(pts>1?" pts":" pt")+" · "+(t/1000).toFixed(1).replace(".",",")+" s"; }
+    else { pts = pointsFor(t); cls="ok"; msg="+"+pts+(pts>1?" pts":" pt")+" · "+(t/1000).toFixed(1).replace(".",",")+" s"; }
     score+=pts;
     const rec_=({a,b,ans,given,t,pts});
     results.push(rec_);
@@ -555,9 +566,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     $("feedback").textContent=msg; $("feedback").className="feedback "+cls;
     $("hudScore").textContent=score+(score>1?" pts":" pt");
     // le téléphone a mal compris ? l'enfant (ou le parent) peut corriger
-    const canFix = pts===0 && mode==="voice" && (given!==null || speechAt!==null);
+    const spoke = speechAt!==null ? speechAt : lastSpeechAt;
+    const canFix = pts===0 && mode==="voice" && (given!==null || spoke!==null);
     $("fixBtn").hidden=!canFix;
-    fixFor = canFix ? {rec:rec_, t:(speechAt!==null? speechAt-qStart : t)} : null;
+    fixFor = canFix ? {rec:rec_, t:(spoke!==null? spoke-qStart : t)} : null;
     const snap=idx;
     nextTimer=setTimeout(()=>next(snap), pts>0?900:(canFix?2600:1800));
   }
@@ -571,7 +583,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   $("fixBtn").addEventListener("click",()=>{
     if(!fixFor) return;
     const {rec:r,t}=fixFor; fixFor=null;
-    const pts = t<=1000?3:t<=2000?2:t<=LIMIT?1:0;
+    const pts = pointsFor(t);
     r.pts=pts; r.given=r.ans; r.fixed=true; score+=pts;
     $("hudScore").textContent=score+(score>1?" pts":" pt");
     $("feedback").textContent = pts? "Corrigé : +"+pts+(pts>1?" pts":" pt") : "Corrigé, mais trop tard";
