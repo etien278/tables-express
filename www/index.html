@@ -72,7 +72,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .hud .score{font-family:var(--display);font-size:1.6rem;color:var(--ink)}
 .question{font-family:var(--display);font-weight:800;color:var(--ink);font-size:clamp(4rem,22vw,7rem);text-align:center;line-height:1;margin:8px 0 0;font-variant-numeric:tabular-nums}
 .answer{min-height:3.2rem;text-align:center;font-family:var(--display);font-size:2.4rem;font-weight:800;color:var(--ink-soft)}
-.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:2fr 1fr 1fr}
+.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:1.75fr 1.25fr 1fr}
 .count{align-self:center;min-width:3.2rem;height:3.2rem;padding:0 10px;border-radius:999px;border:3px solid currentColor;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1;color:var(--good);font-variant-numeric:tabular-nums;margin-bottom:-6px}
 .count:empty{visibility:hidden}
 .count.done{color:var(--margin)}
@@ -144,9 +144,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       </div>
 
       <div class="rules" aria-label="Barème">
-        <div class="r3">3 pts<small>pendant 0 et 1</small></div>
-        <div class="r2">2 pts<small>pendant 2</small></div>
-        <div class="r1">1 pt<small>pendant 3</small></div>
+        <div class="r3">3 pts<small>avant 1,75 s</small></div>
+        <div class="r2">2 pts<small>avant 3 s</small></div>
+        <div class="r1">1 pt<small>avant 4 s</small></div>
       </div>
       <p class="small" style="text-align:center">Le compteur fait 0, 1, 2, 3… puis « Fini ! ». Erreur ou trop tard : 0 point.</p>
 
@@ -222,7 +222,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 (function(){
   const $ = id => document.getElementById(id);
   const LIMIT = 4000;               // compteur 0, 1, 2, 3 puis fini
-  const pointsFor = t => t<2000?3 : t<3000?2 : t<LIMIT?1 : 0;
+  const T3 = 1750, T2 = 3000;       // 3 pts avant 1,75 s, 2 pts avant 3 s, 1 pt avant 4 s
+  const pointsFor = t => t<T3?3 : t<T2?2 : t<LIMIT?1 : 0;
   const MULT_MAX = 10;              // multiplicateur de 0 à 10
   const store = {
     get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
@@ -497,6 +498,10 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       if(!micReadyOnce){
         $("question").textContent="…"; $("answer").textContent=""; $("feedback").textContent=""; $("fill").style.width="0";
         await new Promise(r=>{ firstReady=r; setTimeout(()=>{ firstReady=null; r(); },2000); });
+      } else if(inUtterance){
+        logMic("nouvelle écoute pour le calcul");
+        NativeSR.reset().catch(()=>{});
+        await new Promise(r=>{ readyWait=r; setTimeout(()=>{ readyWait=null; r(); },1200); });
       }
       if(!playing) return;
     }
@@ -551,9 +556,9 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
     const t=performance.now()-qStart;
     const p=Math.min(1,t/LIMIT);
     const f=$("fill"); f.style.width=(p*100)+"%";
-    f.style.background = t<2000?"var(--good)":t<3000?"var(--mid)":"var(--margin)";
+    f.style.background = t<T3?"var(--good)":t<T2?"var(--mid)":"var(--margin)";
     $("count").textContent = t<LIMIT ? String(Math.floor(t/1000)) : "Fini !";
-    $("count").style.color = t<2000?"var(--good)":t<3000?"var(--mid)":"var(--margin)";
+    $("count").style.color = t<T3?"var(--good)":t<T2?"var(--mid)":"var(--margin)";
     $("count").classList.toggle("done", t>=LIMIT);
     if(active && p<1) raf=requestAnimationFrame(loop);
   }

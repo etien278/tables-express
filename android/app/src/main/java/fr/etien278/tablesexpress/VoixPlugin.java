@@ -202,30 +202,34 @@ public class VoixPlugin extends Plugin {
         }
 
         @Override public void onReadyForSpeech(Bundle params) { if (current()) { failures = 0; notifyListeners("ready", withTime()); } }
-        private boolean heardSomething = false;
+        private long lastActivity = 0;
 
-        @Override public void onBeginningOfSpeech() {
-            if (!current()) return;
-            notifyListeners("speech", withTime());
-            // garde-fou : si rien n'est compris 3 s après le début de la parole, on relance l'écoute
+        /** Garde-fou : si le module ne donne plus aucun signe de vie pendant 2,5 s, on relance l'écoute. */
+        private void alive() {
+            lastActivity = SystemClock.elapsedRealtime();
             main.postDelayed(() -> {
-                if (current() && !heardSomething) {
+                if (current() && SystemClock.elapsedRealtime() - lastActivity >= 2400) {
                     done = true;
                     JSObject ret = withTime();
                     ret.put("code", 99);
                     notifyListeners("error", ret);
                     restart(200, true);
                 }
-            }, 3000);
+            }, 2500);
+        }
+
+        @Override public void onBeginningOfSpeech() {
+            if (!current()) return;
+            notifyListeners("speech", withTime());
+            alive();
         }
         @Override public void onRmsChanged(float rmsdB) {}
         @Override public void onBufferReceived(byte[] buffer) {}
-        @Override public void onEndOfSpeech() { if (current()) notifyListeners("end", withTime()); }
+        @Override public void onEndOfSpeech() { if (current()) { notifyListeners("end", withTime()); alive(); } }
         @Override public void onPartialResults(Bundle b) {
             if (!current()) return;
-            ArrayList<String> m = b == null ? null : b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-            if (m != null && !m.isEmpty() && m.get(0) != null && !m.get(0).trim().isEmpty()) heardSomething = true;
             send("partial", b);
+            alive();
         }
         @Override public void onEvent(int eventType, Bundle params) {}
 
