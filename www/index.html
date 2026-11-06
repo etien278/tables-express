@@ -72,7 +72,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .hud .score{font-family:var(--display);font-size:1.6rem;color:var(--ink)}
 .question{font-family:var(--display);font-weight:800;color:var(--ink);font-size:clamp(4rem,22vw,7rem);text-align:center;line-height:1;margin:8px 0 0;font-variant-numeric:tabular-nums}
 .answer{min-height:3.2rem;text-align:center;font-family:var(--display);font-size:2.4rem;font-weight:800;color:var(--ink-soft)}
-.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:1.75fr 1.25fr 1fr}
+.bar{position:relative;height:22px;border-radius:11px;overflow:hidden;background:var(--line);display:grid;grid-template-columns:1.6fr 1.4fr 1fr}
 .count{align-self:center;min-width:3.2rem;height:3.2rem;padding:0 10px;border-radius:999px;border:3px solid currentColor;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1;color:var(--good);font-variant-numeric:tabular-nums;margin-bottom:-6px}
 .count:empty{visibility:hidden}
 .count.done{color:var(--margin)}
@@ -144,7 +144,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
       </div>
 
       <div class="rules" aria-label="Barème">
-        <div class="r3">3 pts<small>avant 1,75 s</small></div>
+        <div class="r3">3 pts<small>avant 1,6 s</small></div>
         <div class="r2">2 pts<small>avant 3 s</small></div>
         <div class="r1">1 pt<small>avant 4 s</small></div>
       </div>
@@ -222,7 +222,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 (function(){
   const $ = id => document.getElementById(id);
   const LIMIT = 4000;               // compteur 0, 1, 2, 3 puis fini
-  const T3 = 1750, T2 = 3000;       // 3 pts avant 1,75 s, 2 pts avant 3 s, 1 pt avant 4 s
+  const T3 = 1600, T2 = 3000;       // 3 pts avant 1,6 s, 2 pts avant 3 s, 1 pt avant 4 s
   const pointsFor = t => t<T3?3 : t<T2?2 : t<LIMIT?1 : 0;
   const MULT_MAX = 10;              // multiplicateur de 0 à 10
   const store = {
@@ -291,7 +291,7 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
   const WORDS = {zéro:0,zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,cette:7,set:7,huit:8,neuf:9,
     dix:10,dis:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,vingt:20,vingts:20,vin:20,cents:100,trente:30,
     quarante:40,cinquante:50,soixante:60,cent:100,sans:100,
-    si:6,scie:6,sis:6,cis:6,deu:2,œuf:9,oeuf:9,saint:5,sain:5,sein:5,cet:7,vain:20,vint:20,sang:100,douce:12,seiz:16};
+    si:6,scie:6,sis:6,cis:6,deu:2,œuf:9,oeuf:9,saint:5,sain:5,sein:5,cet:7,vain:20,vint:20,sang:100,douce:12,seiz:16,zéros:0,zeros:0,numéro:0,héros:0};
   function parseNumber(txt){
     txt = txt.toLowerCase();
     const digits = txt.match(/\d+/g);
