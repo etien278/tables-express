@@ -2,10 +2,12 @@ apply plugin: 'com.android.application'
 
 // numéro de version fourni par GitHub à chaque construction
 def buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+// clé d'envoi privée pour le Play Store (fournie par les secrets GitHub, jamais dans le dépôt)
+def uploadStore = System.getenv("UPLOAD_STORE_FILE")
 
 android {
-    namespace "fr.etien278.tablesexpress"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "fr.etien278.tablesexpress"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "fr.etien278.tablesexpress"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -16,22 +18,29 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     signingConfigs {
-        // Clé de signature fixe : permet d'installer les mises à jour par-dessus l'ancienne version.
-        // Elle est publique dans ce dépôt : suffisant pour une installation manuelle, pas pour le Play Store.
+        // Clé publique de ce dépôt : APK installé à la main (les mises à jour s'installent par-dessus).
         tables {
-            storeFile file("tables-express.jks")
-            storePassword "tablesexpress"
-            keyAlias "tables"
-            keyPassword "tablesexpress"
+            storeFile = file("tables-express.jks")
+            storePassword = "tablesexpress"
+            keyAlias = "tables"
+            keyPassword = "tablesexpress"
+        }
+        if (uploadStore) {
+            upload {
+                storeFile = file(uploadStore)
+                storePassword = System.getenv("UPLOAD_STORE_PASSWORD")
+                keyAlias = System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword = System.getenv("UPLOAD_KEY_PASSWORD")
+            }
         }
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.tables
+            signingConfig = uploadStore ? signingConfigs.upload : signingConfigs.tables
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

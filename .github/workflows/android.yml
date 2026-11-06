@@ -11,6 +11,8 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v5
 
@@ -38,6 +40,20 @@ jobs:
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk ../tables-express.apk
 
+      - name: Construire le paquet pour le Play Store (.aab, clé privée)
+        if: ${{ env.UPLOAD_KEYSTORE_BASE64 != '' }}
+        working-directory: android
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_STORE_PASSWORD: ${{ secrets.UPLOAD_STORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: |
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks" ./gradlew bundleRelease --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab ../tables-express-play.aab
+          rm -f "$RUNNER_TEMP/upload.jks"
+
       - name: Garder l'APK dans les résultats de la construction
         uses: actions/upload-artifact@v4
         with:
@@ -51,6 +67,10 @@ jobs:
           name: Tables Express 1.0.${{ github.run_number }}
           body: |
             Télécharge **tables-express.apk** ci-dessous et ouvre-le sur ton téléphone Android pour l'installer.
+            **tables-express-play.aab** est le paquet à envoyer dans la Play Console.
             Les mises à jour s'installent par-dessus l'ancienne version, les scores sont conservés.
-          files: tables-express.apk
+          files: |
+            tables-express.apk
+            tables-express-play.aab
+          fail_on_unmatched_files: false
           make_latest: true
