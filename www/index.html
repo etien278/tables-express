@@ -28,7 +28,7 @@
 *{box-sizing:border-box}
 html{-webkit-tap-highlight-color:transparent}
 button{touch-action:manipulation}
-html,body{height:100%}
+html,body{min-height:100%}
 body{
   margin:0;font-family:var(--body);color:var(--text);background-color:var(--paper);
   background-image:
@@ -116,7 +116,8 @@ input[type=text]:focus,button:focus-visible{outline:3px solid var(--mid);outline
 .fboard .fn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
 .fboard .fs{text-align:right;font-size:.85rem;color:var(--ink-soft)}
 .fboard .fs b{font-family:var(--display);font-size:1.15rem;color:var(--ink)}
-body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--ad-h,0px))}
+/* place réservée sous le contenu pour le bandeau de pub (appli Android) */
+.wrap{padding-bottom:calc(40px + var(--ad-h,0px))}
 .heard{text-align:center;margin:-8px 0 0;min-height:1.2rem;font-size:.85rem;color:var(--ink-soft);font-style:italic}
 .fix{align-self:center;font:inherit;font-weight:800;padding:8px 16px;border-radius:999px;border:2px solid var(--good);background:var(--card);color:var(--good);cursor:pointer}
 </style>
@@ -954,13 +955,14 @@ body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--ad-h,0px))}
   const Ads = (()=>{
     const cfg=window.TX_ADS;
     const plugin=(IS_NATIVE && window.capacitorExports && cfg && cfg.bannerId) ? window.capacitorExports.registerPlugin("AdMob") : null;
-    let started=false, shown=false, hidden=false;
+    let started=false, shown=false, hidden=false, lastH="70px";
     async function init(){
       if(!plugin || started) return; started=true;
       try{
         // application pour enfants : publicités tout public, sans ciblage personnalisé
         await plugin.initialize({tagForChildDirectedTreatment:true, tagForUnderAgeOfConsent:true, maxAdContentRating:"General", initializeForTesting:!!cfg.testing});
-        await plugin.addListener("bannerAdSizeChanged",sz=>{ document.documentElement.style.setProperty("--ad-h",(sz&&sz.height?sz.height:0)+"px"); });
+        await plugin.addListener("bannerAdSizeChanged",sz=>{ document.documentElement.style.setProperty("--ad-h",(lastH=(sz&&sz.height?Math.max(sz.height+10,60):70)+"px")); });
+        document.documentElement.style.setProperty("--ad-h","70px");
         await plugin.showBanner({adId:cfg.bannerId, adSize:"ADAPTIVE_BANNER", position:"BOTTOM_CENTER", margin:0, isTesting:!!cfg.testing, npa:true});
         shown=true; if(hidden){ plugin.hideBanner().catch(()=>{}); }
       }catch(e){ started=false; }
@@ -968,7 +970,7 @@ body{padding-bottom:calc(env(safe-area-inset-bottom,0px) + var(--ad-h,0px))}
     function forScreen(id){
       if(!plugin) return;
       if(id==="game"){ hidden=true; if(shown) plugin.hideBanner().catch(()=>{}); document.documentElement.style.setProperty("--ad-h","0px"); }
-      else { const was=hidden; hidden=false; if(!started) init(); else if(shown && was) plugin.resumeBanner().catch(()=>{}); }
+      else { const was=hidden; hidden=false; if(!started) init(); else if(shown && was){ plugin.resumeBanner().catch(()=>{}); document.documentElement.style.setProperty("--ad-h",lastH); } }
     }
     return {forScreen};
   })();
