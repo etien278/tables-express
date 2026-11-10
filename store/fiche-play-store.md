@@ -61,6 +61,8 @@ Les captures 5 et 6 montrent des exemples de progrès et de copains.
 
 **Annonces** : Oui, mon application contient des annonces.
 
+**Identifiant publicitaire** : Non, l'application n'utilise pas d'identifiant publicitaire (permission AD_ID retirée, obligatoire pour une appli destinée aux enfants).
+
 **Classification du contenu** (questionnaire IARC)
 - Catégorie : « Toutes les autres applications » (ni jeu de référence, ni réseau social)
 - Violence, sexualité, langage grossier, drogues, jeux d'argent : Non partout
@@ -85,7 +87,7 @@ Données collectées :
 |---|---|---|---|---|
 | Informations personnelles | Autres infos (pseudo) | Collectée | Facultative (écran Copains) | Fonctionnalités de l'appli |
 | Activité dans l'appli | Autres actions (scores, parties) | Collectée | Facultative (écran Copains) | Fonctionnalités de l'appli |
-| Identifiants de l'appareil ou autres | Identifiant anonyme Firebase, identifiant publicitaire utilisé par AdMob | Collectée | Obligatoire | Fonctionnalités de l'appli, publicité, prévention de la fraude |
+| Identifiants de l'appareil ou autres | Identifiant anonyme Firebase (l'appli n'utilise pas l'identifiant publicitaire Android) | Collectée | Obligatoire | Fonctionnalités de l'appli, prévention de la fraude |
 | Infos sur l'appli et performances | Journaux de plantage, diagnostics (AdMob) | Collectée | Obligatoire | Analyse, publicité |
 
 Micro : la voix n'est ni enregistrée ni envoyée par l'application. La reconnaissance vocale est assurée par le service du système Android. Ne pas déclarer « Enregistrements vocaux » comme collectés par l'application. Si la Play Console pose la question, préciser que l'audio est traité de façon éphémère par le service de reconnaissance vocale du système.
