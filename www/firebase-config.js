@@ -10,6 +10,5 @@ window.TX_FIREBASE = {
 };
 
 // Bandeau de publicité (application Android seulement).
-// Identifiant de bandeau de test fourni par Google : à remplacer par celui de ton compte AdMob,
-// puis passer testing à false.
-window.TX_ADS = { bannerId: "ca-app-pub-3940256099942544/6300978111", testing: true };
+// Bloc d'annonces « bandeau-bas » du compte AdMob.
+window.TX_ADS = { bannerId: "ca-app-pub-5171289248104054/2354951500", testing: false };
