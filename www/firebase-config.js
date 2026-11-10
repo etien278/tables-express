@@ -11,4 +11,5 @@ window.TX_FIREBASE = {
 
 // Bandeau de publicité (application Android seulement).
 // Bloc d'annonces « bandeau-bas » du compte AdMob.
-window.TX_ADS = { bannerId: "ca-app-pub-5171289248104054/2354951500", testing: false };
+// Pub coupée pendant le test fermé. Pour la remettre, enlever « null && » ci-dessous.
+window.TX_ADS = null && { bannerId: "ca-app-pub-5171289248104054/2354951500", testing: false };

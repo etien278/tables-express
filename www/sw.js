@@ -1,5 +1,5 @@
 // Tables Express : fonctionne hors ligne une fois installée
-const CACHE = "tables-express-v29";
+const CACHE = "tables-express-v30";
 const SHELL = [
   "./",
   "./index.html",
